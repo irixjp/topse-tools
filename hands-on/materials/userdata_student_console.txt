@@ -1,0 +1,47 @@
+#!/bin/bash
+
+setenforce 0
+sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+
+cp -p /etc/hosts /root/hosts
+echo "157.1.205.1 reposerver" >> /etc/hosts
+
+yum clean all
+rm -f /etc/yum.repos.d/* /root/temp
+curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/centos7/edubase-kilo.repo
+
+yum update -y
+
+yum groupinstall -y "MATE Desktop"
+
+yum install -y xrdp
+#yum install -y http://reposerver/openstack/xrdp/x11rdp-0.9.0.gitf422461+master-1.el7.centos.x86_64.rpm
+#yum install -y http://reposerver/openstack/xrdp/xrdp-0.9.0.gitf422461+master-1.el7.centos.x86_64.rpm
+
+yum install -y python-openstackclient python-cinderclient python-glanceclient python-keystoneclient python-neutronclient python-novaclient python-heatclient python-swiftclient python-troveclient
+install -y firefox vim emacs lynx graphviz plotnetcfg
+install -y screen kernel-modules iscsi-initiator-utils graphviz plotnetcfg bash-completion gnome-terminal wget
+
+systemctl stop    firewalld.service
+systemctl disable firewalld.service
+systemctl start  xrdp.service
+systemctl enable xrdp.service
+
+cat << __EOF__ > /home/centos/.Xclients
+#!/bin/bash
+export LANG=C
+ibus-daemon -d
+exec mate-session
+__EOF__
+
+chown centos:centos /home/centos/.Xclients
+chmod +x /home/centos/.Xclients
+
+mkdir -p /home/centos/.config/dconf
+curl -o /home/centos/.config/dconf/user http://reposerver/openstack/tools/materials/config_dconf_user
+chown -R centos:centos /home/centos/.config
+
+/bin/cp -f /root/hosts /etc/hosts
+rm -f /root/hosts
+
+shutdown -h now

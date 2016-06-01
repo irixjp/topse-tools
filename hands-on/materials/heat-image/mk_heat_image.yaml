@@ -1,0 +1,64 @@
+heat_template_version: 2014-10-16
+description: |
+  This template builds an centos7 image which is installed heat-tools.
+
+  usage
+  $ git clone https://github.com/openstack/heat-templates.git
+  $ vi heat-templates/hot/software-config/boot-config/templates/fragments/install_config_agent_yum.sh
+  ---------------------------
+  #!/bin/bash
+  set -eux
+
+  cp -p /etc/hosts /root/hosts
+  echo "157.1.205.1 reposerver" >> /etc/hosts
+  rm -f /etc/yum.repos.d/*
+  curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/centos7/edubase-kilo.repo
+  yum clean all
+  yum -y install python-zaqarclient.noarch
+  yum -y install os-collect-config os-apply-config os-refresh-config dib-utils
+  yum clean all
+  /usr/bin/mv -f /root/hosts /etc/hosts
+  ---------------------------
+  $ heat stack-create -e heat-templates/hot/software-config/boot-config/fedora_yum_env.yaml -f mk_heat_image.yaml -P 'image=CentOS7-1603;net=work-net;sec=open_all' install_heat_tools
+
+  shutdown the instance after installing boot-config. And creating an image from the instance.
+  $nova image-create install_heat_tools-server-nljbrtjrj53t CentOS7-SoftwareDeployment
+
+parameters:
+  image:
+    type: string
+  net:
+    type: string
+  sec:
+    type: string
+
+resources:
+  boot_config:
+    type: Heat::InstallConfigAgent
+
+  ssh_key:
+    type: OS::Nova::KeyPair
+    properties:
+      name: private_access_key
+      save_private_key: true
+
+  server:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: image }
+      flavor: m1.small
+      key_name: { get_resource: ssh_key }
+      user_data_format: SOFTWARE_CONFIG
+      user_data: {get_attr: [boot_config, config]}
+      security_groups:
+        - { get_param: sec }
+      networks:
+        - network: { get_param: net }
+
+outputs:
+  server_ip:
+    value:
+      get_attr: [server, networks]
+  private_key:
+    value:
+      get_attr: [ssh_key, private_key]

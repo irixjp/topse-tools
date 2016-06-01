@@ -1,0 +1,41 @@
+- name: Fixed nic name problems that the name will be chaneged unexpected
+  hosts: allnode
+  tasks:
+    - name: disable some services
+      shell: |
+        systemctl stop NetworkManager.service
+        systemctl disable NetworkManager.service
+        systemctl stop dodai-instance-agent.service
+        systemctl disable dodai-instance-agent.service
+
+    - name: create eth1 files from em1 or em4
+      script: script_edit_ifcfg.sh
+      args:
+        creates: /etc/sysconfig/network-scripts/ifcfg-eth1
+
+    - name: rename nic device file and replace name in the file.
+      shell: |
+        mv /etc/sysconfig/network-scripts/ifcfg-em1  /etc/sysconfig/network-scripts/ifcfg-eth0
+        mv /etc/sysconfig/network-scripts/ifcfg-p2p1 /etc/sysconfig/network-scripts/ifcfg-eth2
+        mv /etc/sysconfig/network-scripts/ifcfg-p2p2 /etc/sysconfig/network-scripts/ifcfg-eth3
+        sed -i -e 's/em1/eth0/g'  /etc/sysconfig/network-scripts/ifcfg-eth0
+        sed -i -e 's/p2p1/eth2/g' /etc/sysconfig/network-scripts/ifcfg-eth2
+        sed -i -e 's/p2p2/eth3/g' /etc/sysconfig/network-scripts/ifcfg-eth3
+      args:
+        creates: /etc/sysconfig/network-scripts/ifcfg-eth0
+
+    - name: rename nic device file and replace name in the file.
+      shell:
+        rm -f /etc/udev/rules.d/70-persistent-net.rules
+      args:
+        removes: /etc/udev/rules.d/70-persistent-net.rules
+
+    - name: set kernel parameter
+      replace: >
+        dest=/etc/default/grub
+        regexp=' edd=off"$'
+        replace=' edd=off biosdevname=0 net.ifnames=1"'
+
+    - name: repalce grub2.conf files
+      shell:
+        grub2-mkconfig -o /boot/grub2/grub.cfg

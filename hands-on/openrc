@@ -1,0 +1,5 @@
+export OS_AUTH_URL=http://y.y.y.y:5000/v2.0
+export OS_REGION_NAME=RegionOne
+export OS_TENANT_NAME=tenant-xxxxx
+export OS_USERNAME=student-xxxxx
+export OS_PASSWORD=xxxxx

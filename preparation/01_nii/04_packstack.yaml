@@ -1,0 +1,63 @@
+- name: install packstack
+  hosts: controller
+  vars:
+    password: ^topse2016$
+    ctl_host: 157.1.205.2
+    net_host: 157.1.205.2
+    cpu_host: 157.1.205.2,157.1.205.3,157.1.205.4,157.1.205.5,157.1.205.6,157.1.205.7,157.1.205.8,157.1.205.9,157.1.205.10,157.1.205.11
+    tunn_nic: eth3
+  tasks:
+    - name: install openstack-packstack
+      yum: name=openstack-packstack state=latest
+
+    - name: install openstack-packstack-doc
+      yum: name=openstack-packstack-doc state=latest
+
+    - name: install python-netaddr
+      yum: name=python-netaddr state=latest
+
+    - name: create answer file
+      shell: |
+        packstack --dry-run --allinone --default-password='{{ password }}' --provision-demo=n --gen-answer-file=/root/answer.txt
+
+    - name: edit answer file
+      shell: |
+        crudini --set /root/answer.txt general CONFIG_NAGIOS_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_CEILOMETER_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_SWIFT_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_HEAT_INSTALL y
+
+        crudini --set /root/answer.txt general CONFIG_CONTROLLER_HOST {{ ctl_host }}
+        crudini --set /root/answer.txt general CONFIG_NETWORK_HOSTS   {{ net_host }}
+        crudini --set /root/answer.txt general CONFIG_COMPUTE_HOSTS   {{ cpu_host }}
+
+        crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
+        crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 300G
+        crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 300G
+
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
+        crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF {{ tunn_nic }}
+
+      args:
+        removes: /root/answer.txt
+
+
+
+- name: temporary disable selinux before run packstack
+  hosts: allnode
+  tasks:
+    - name: setenforce 0
+      shell: setenforce 0; exit 0
+      ignore_errors: True
+
+
+
+- name: exec packstack
+  hosts: controller
+  tasks:
+    - name: exec packstack
+      shell: |
+        packstack --answer-file=/root/answer.txt

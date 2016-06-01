@@ -1,0 +1,207 @@
+heat_template_version: 2015-04-30
+
+description: 09th demo template.
+
+parameters:
+  public_network:
+    type: string
+    label: Public network name or ID
+    description: Public network with floating IP addresses.
+    default: public
+
+  ext_router:
+    type: string
+    label: Public router name or ID
+    description: Public router which is connected to external network.
+    default: Ext-Router
+
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for the server.
+    default: CentOS7-1603
+
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used on the compute instance.
+    default: m1.small
+
+  reposerver:
+    type: string
+    default: 157.1.205.1
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 4
+      timeout: 300
+
+  private_net1:
+    type: OS::Neutron::Net
+    properties:
+      name: private-net1
+
+  private_subnet1:
+    type: OS::Neutron::Subnet
+    properties:
+      name: private-subnet1
+      ip_version: 4
+      network_id: { get_resource: private_net1 }
+      cidr: 10.99.100.0/24
+      gateway_ip: 10.99.100.254
+      enable_dhcp: True
+
+  router_interface1:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_param: ext_router }
+      subnet: { get_resource: private_subnet1 }
+
+  private_net2:
+    type: OS::Neutron::Net
+    properties:
+      name: private-net1
+
+  private_subnet2:
+    type: OS::Neutron::Subnet
+    properties:
+      name: private-subnet2
+      ip_version: 4
+      network_id: { get_resource: private_net2 }
+      cidr: 10.99.200.0/24
+      gateway_ip: 10.99.200.254
+      enable_dhcp: True
+
+  router_interface2:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_param: ext_router }
+      subnet: { get_resource: private_subnet2 }
+
+  demo_all_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: demo_all
+      rules:
+        - protocol: icmp
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+        - protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+        - protocol: tcp
+          port_range_min: 443
+          port_range_max: 443
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: key-for-demo
+      save_private_key: true
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: password
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_reposerver:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            pm_reposerver_host: { get_param: reposerver }
+          template: |
+            #!/bin/bash -ex
+            echo "pm_reposerver_host reposerver" >> /etc/hosts
+            rm -Rf /etc/yum.repos.d/*
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/centos7/edubase-kilo.repo
+
+  config_send_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_reposerver }
+      - config: { get_resource: config_send_notify }
+
+  demo_instance1:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_resource: key_pair }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+      networks:
+        - network: { get_resource: private_net1 }
+        - network: { get_resource: private_net2 }
+      security_groups:
+        - { get_resource: demo_all_security_group }
+
+  demo_instance2:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_resource: key_pair }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+      networks:
+        - network: { get_resource: private_net1 }
+        - network: { get_resource: private_net2 }
+      security_groups:
+        - { get_resource: demo_all_security_group }
+
+  demo_instance3:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_resource: key_pair }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+      networks:
+        - network: { get_resource: private_net1 }
+      security_groups:
+        - { get_resource: demo_all_security_group }
+
+  demo_instance4:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_resource: key_pair }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+      networks:
+        - network: { get_resource: private_net2 }
+      security_groups:
+        - { get_resource: demo_all_security_group }
+
+outputs:
+  single_private_key:
+    description: Private Key of generated keypair
+    value: { get_attr: [key_pair, private_key] }

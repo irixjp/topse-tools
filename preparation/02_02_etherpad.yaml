@@ -1,0 +1,334 @@
+heat_template_version: 2015-04-30
+
+description: |
+  This template create etherpad server on centos7
+  You need to give "reposerver" ip address to use this template.
+  $ heat stack-create -f this_file -P 'reposerver=xx.xx.xx.xx' etherpad
+
+parameters:
+  public_network:
+    type: string
+    label: Public network name or ID
+    description: Public network with floating IP addresses.
+    default: public
+
+  private_network:
+    type: string
+    label: Internal network name
+    description: Internal network name or ID as a work-net.
+    default: tools-net
+
+  sec_group:
+    type: string
+    label: Security group name for console server
+    description: Security group name for console server.
+    default: sg-for-tools
+
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for the server.
+    default: CentOS7-1603
+
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used on the compute instance.
+    default: m1.small
+
+  key:
+    type: string
+    default: key-for-etherpad
+
+  instance_name:
+    type: string
+    default: etherpad
+
+  reposerver:
+    type: string
+    description: you need to give a specified IP address to connect to reposerver by -P options
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 1800
+
+  wait_handle_after_reboot:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition_after_reboot:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle_after_reboot }
+      count: 1
+      timeout: 1800
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: { get_param: key }
+      save_private_key: true
+
+  neutron-port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: private_network }
+      security_groups:
+        - { get_param: sec_group }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_network }
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron-port }
+
+  passwd:
+    type: OS::Heat::RandomString
+    properties:
+      length: 12
+      sequence: lettersdigits
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_attr: [passwd, value] }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_etherpad:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            wc_reposerver_ip: { get_param: reposerver }
+            wc_external_ip: { get_attr: [floating_ip, floating_ip_address] }
+          template: |
+            #!/bin/bash -ex
+            setenforce 0
+            sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+
+            ################
+            ## set repogitry
+            ################
+            mkdir -p /root/temp
+            echo "wc_reposerver_ip reposerver" >> /etc/hosts
+            mv /etc/yum.repos.d/* /root/temp
+            cd /etc/yum.repos.d
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/centos7/edubase-kilo.repo
+            yum clean all
+            yum repolist
+            yum update -y
+
+            ################
+            ## Install dependency packages
+            ################
+            yum install -y wget git crudini vim nodejs npm mariadb mariadb-server nginx
+
+            ################
+            ## MariaDB
+            ################
+            crudini --set /etc/my.cnf.d/server.cnf mysqld character-set-server utf8
+            crudini --set /etc/my.cnf.d/client.cnf client default-character-set utf8
+            systemctl enable mariadb.service
+            systemctl start  mariadb.service
+
+            mysqladmin -u root password 'password'
+
+            cat << EOF > /tmp/sql.txt
+            DELETE FROM mysql.user WHERE user = '' OR ( user = 'root' AND host != 'localhost' );
+            FLUSH PRIVILEGES;
+            CREATE DATABASE epdb CHARACTER SET utf8;
+            GRANT ALL PRIVILEGES ON epdb.* TO 'epuser'@'%' IDENTIFIED BY 'eppasswd';
+            FLUSH PRIVILEGES;
+            SELECT user, password, host FROM mysql.user;
+            EOF
+
+            mysql -uroot -ppassword < /tmp/sql.txt
+
+            ################
+            ## Etherpad
+            ################
+            mkdir -p /opt
+            useradd -d /opt/etherpad etherpad
+
+            su - etherpad -c 'git clone https://github.com/ether/etherpad-lite.git; cd etherpad-lite; git checkout -b 1.5.7 remotes/origin/release/1.5.7'
+            su - etherpad -c 'cd /opt/etherpad/etherpad-lite; sh bin/installDeps.sh'
+
+            cat << EOF > /usr/lib/systemd/system/etherpad.service
+            [Unit]
+            Description=Run Etherpad-lite, the collaborative editor.
+            After=syslog.target network.target
+
+            [Service]
+            Type=simple
+            User=etherpad
+            Group=etherpad
+            ExecStart=/opt/etherpad/etherpad-lite/bin/run.sh
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            cat << EOF > /opt/etherpad/etherpad-lite/settings.json
+            {
+              "title": "Etherpad",
+              "favicon": "favicon.ico",
+              "ip": "0.0.0.0",
+              "port" : 9001,
+              "dbType" : "mysql",
+              "dbSettings" : {
+                "user"    : "epuser",
+                "host"    : "localhost",
+                "password": "eppasswd",
+                "database": "epdb"
+                },
+              "defaultPadText" : "",
+              "padOptions": {
+                "noColors": false,
+                "showControls": true,
+                "showChat": true,
+                "showLineNumbers": true,
+                "useMonospaceFont": true,
+                "userName": false,
+                "userColor": false,
+                "rtl": false,
+                "alwaysShowChat": false,
+                "chatAndUsers": false,
+                "lang": "en-gb"
+                },
+              "suppressErrorsInPadText" : false,
+              "requireSession" : false,
+              "editOnly" : false,
+              "sessionNoPassword" : false,
+              "minify" : true,
+              "maxAge" : 21600,
+              "abiword" : null,
+              "tidyHtml" : null,
+              "allowUnknownFileEnds" : true,
+              "requireAuthentication" : false,
+              "requireAuthorization" : false,
+              "trustProxy" : false,
+              "disableIPlogging" : false,
+              "socketTransportProtocols" : ["xhr-polling", "jsonp-polling", "htmlfile"],
+              "loadTest": false,
+              "loglevel": "INFO",
+              "logconfig" :
+                { "appenders": [
+                  { "type": "console" }
+                  ]
+                }
+              }
+            EOF
+
+            systemctl enable etherpad.service
+            systemctl start  etherpad.service
+
+            ################
+            ## Nginx
+            ################
+            FIP=wc_external_ip
+            cat << EOF > /etc/nginx/conf.d/eplite.conf
+            server {
+              listen       80;
+              server_name  ${FIP};
+
+              access_log  /var/log/nginx/eplite.access.log;
+              error_log   /var/log/nginx/eplite.error.log;
+
+              location / {
+              proxy_pass             http://localhost:9001/;
+              proxy_set_header       Host \$host;
+              proxy_pass_header Server;
+              proxy_buffering off;
+              proxy_set_header X-Real-IP \$remote_addr;
+              proxy_set_header Host \$host;
+              proxy_http_version 1.1;
+              proxy_set_header Upgrade \$http_upgrade;
+              proxy_set_header Connection \$connection_upgrade;
+
+              }
+            }
+
+            map \$http_upgrade \$connection_upgrade {
+              default upgrade;
+              ''      close;
+              }
+            EOF
+
+            systemctl enable nginx.service
+            systemctl start  nginx.service
+            echo "### finish!! ###"
+
+  config_send_notify_after_settings:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_send_notify_after_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            cat << EOF >> /etc/rc.d/rc.local
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+            EOF
+            chmod u+x /etc/rc.d/rc.local
+            reboot
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_etherpad }
+      - config: { get_resource: config_send_notify_after_settings }
+      - config: { get_resource: config_send_notify_after_reboot }
+
+  instance:
+    type: OS::Nova::Server
+    properties:
+      name: { get_param: instance_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron-port }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+
+outputs:
+  instance_name:
+    description: Name of the instance
+    value: { get_attr: [instance, name] }
+  floating_ip:
+    description: The IP address of the deployed instance
+    value: { get_attr: [floating_ip, floating_ip_address] }
+  private_key:
+    description: Private Key of generated keypair
+    value: { get_attr: [key_pair, private_key] }
+  password:
+    value: { get_attr: [passwd, value] }
