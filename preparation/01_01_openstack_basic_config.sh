@@ -50,6 +50,13 @@ glance --os-image-api-version 1 image-create \
        --progress
 
 glance --os-image-api-version 1 image-create \
+       --name "CentOS7-Heat" \
+       --disk-format qcow2 --container-format bare \
+       --copy-from http://reposerver/openstack/images/CentOS-7-201160408-with-heat-v2.qcow2 \
+       --is-public True --is-protected True \
+       --progress
+
+glance --os-image-api-version 1 image-create \
        --name "Ubuntu14.04_LTS" \
        --disk-format qcow2 --container-format bare \
        --copy-from http://reposerver/openstack/images/trusty-server-cloudimg-amd64-disk1.img \
