@@ -1,0 +1,61 @@
+heat_template_version: 2015-04-30
+
+description: nested template with single template.
+
+parameters:
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for the server.
+    default: CentOS7-1509
+
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used on the compute instance.
+    default: m1.small
+
+  private_network:
+    type: string
+    label: Internal network name
+    description: Internal network name or ID
+    default: work-net
+
+  sec_group:
+    type: string
+    label: Security group name
+    description: Security group name
+    default: open_all
+
+  key:
+    type: string
+    label: Key name
+    description: Name of key-pair to be installed on the compute instance.
+    default: my-key
+
+  cluster_size:
+    type: number
+    default: 1
+
+resources:
+  simple_cluster:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: cluster_size }
+      resource_def:
+        type: 15_02_simple_server.yaml
+        properties:
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          key: { get_param: key }
+          sec_group: { get_param: sec_group }
+          private_network:  { get_param: private_network }
+
+outputs:
+  instance_name:
+    description: Name of the instance
+    value: { get_attr: [ simple_cluster, instance_name ] }
+  instance_ip:
+    description: The IP address of the deployed instance
+    value: { get_attr: [ simple_cluster, instance_ip ] }
+
