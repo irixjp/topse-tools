@@ -26,7 +26,11 @@
       args:
         removes: /etc/cinder/cinder.conf
 
-
+    - name: edit neutron plugin.ini
+      shell: |
+        openstack-config --set /etc/neutron/plugin.ini ml2_type_vxlan vni_ranges 10:1000
+      args:
+        removes: /etc/neutron/plugin.ini
 
 - name: edit openstack conf files on compute node
   hosts: compute
