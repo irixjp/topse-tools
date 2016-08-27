@@ -1,0 +1,172 @@
+heat_template_version: 2015-04-30
+
+description: Heat demo template for handson.
+
+parameters:
+  public_network:
+    type: string
+    default: public
+
+  image:
+    type: string
+    default: cirros
+
+  flavor:
+    type: string
+    default: m1.tiny
+
+  web_cluster_size:
+    type: number
+    default: 1
+
+  app_cluster_size:
+    type: number
+    default: 1
+
+  dbs_cluster_size:
+    type: number
+    default: 1
+
+resources:
+  ext_router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: public_network }
+
+  web_net:
+    type: OS::Neutron::Net
+
+  web_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      ip_version: 4
+      network_id: { get_resource: web_net }
+      cidr: 10.99.10.0/24
+      gateway_ip: 10.99.10.254
+      enable_dhcp: True
+
+  app_net:
+    type: OS::Neutron::Net
+
+  app_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      ip_version: 4
+      network_id: { get_resource: app_net }
+      cidr: 10.99.20.0/24
+      gateway_ip: 10.99.20.254
+      enable_dhcp: True
+
+  dbs_net:
+    type: OS::Neutron::Net
+
+  dbs_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      ip_version: 4
+      network_id: { get_resource: dbs_net }
+      cidr: 10.99.30.0/24
+      gateway_ip: 10.99.30.254
+      enable_dhcp: True
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_resource: ext_router }
+      subnet: { get_resource: web_subnet }
+
+  sec_grp:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        - protocol: icmp
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          port_range_min: 443
+          port_range_max: 443
+          remote_ip_prefix: 0.0.0.0/0
+
+  key_name:
+    type: OS::Heat::RandomString
+    properties:
+      sequence: letters
+      length: 10
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: { get_resource: key_name }
+      save_private_key: true
+
+  web_cluster:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: web_cluster_size }
+      resource_def:
+        type: OS::Nova::Server
+        properties:
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          key_name: { get_resource: key_pair }
+          security_groups:
+            - { get_resource: sec_grp }
+          networks:
+            - network: { get_resource: web_net }
+            - network: { get_resource: app_net }
+
+  app_cluster:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: app_cluster_size }
+      resource_def:
+        type: OS::Nova::Server
+        properties:
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          key_name: { get_resource: key_pair }
+          security_groups:
+            - { get_resource: sec_grp }
+          networks:
+            - network: { get_resource: app_net }
+            - network: { get_resource: dbs_net }
+
+  dbs_cluster:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: dbs_cluster_size }
+      resource_def:
+        type: OS::Nova::Server
+        properties:
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          key_name: { get_resource: key_pair }
+          security_groups:
+            - { get_resource: sec_grp }
+          networks:
+            - network: { get_resource: dbs_net }
+
+outputs:
+  private_key:
+    description: Private Key of generated keypair
+    value: { get_attr: [key_pair, private_key] }
+
+  web_ips:
+    description: The IP address of the deployed instance
+    value: { get_attr: [ web_cluster, first_address ] }
+
+  app_ips:
+    description: The IP address of the deployed instance
+    value: { get_attr: [ app_cluster, first_address ] }
+
+  dbs_ips:
+    description: The IP address of the deployed instance
+    value: { get_attr: [ app_cluster, first_address ] }
