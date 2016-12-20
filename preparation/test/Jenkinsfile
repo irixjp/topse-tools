@@ -1,3 +1,5 @@
+import hudson.model.*
+
 node {
   // The last stage cleans up the local images and workspace
   stage('Housekeeping') {
