@@ -14,6 +14,7 @@ node {
     sh "nova --help"
     checkout scm
     sh "find ."
+    sh "git branch"
 
   }
 
