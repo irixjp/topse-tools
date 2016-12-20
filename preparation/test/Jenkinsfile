@@ -1,12 +1,12 @@
 node {
   // The last stage cleans up the local images and workspace
-  stage 'Housekeeping'
+  stage('Housekeeping') {
 
-  deleteDir()
+    deleteDir()
 
-  // Set env variables
-  def branch = "${BRANCH_NAME}"
-  sh 'echo $BRANCH_NAME'
+    sh 'echo $env.BRANCH_NAME'
+
+  }
 
   // The first stage checks out the code from Github
   stage 'Get Code'
