@@ -1,8 +1,17 @@
 node {
-  stage 'メッセージの表示' 
-  sh 'echo Hello Pipeline.' 
-  
-  stage '日付の表示'
-  sh 'date'
+  // The last stage cleans up the local images and workspace
+  stage 'Housekeeping' 
+  deleteDir()
+
+  // Set env variables
+  def branch = "${BRANCH_NAME}"
+  sh 'echo $BRANCH_NAME'
+  // The first stage checks out the code from Github
+  stage 'Get Code'
+
+  // Get some code from a GitHub repository
+  checkout scm
+
+
 }
 
