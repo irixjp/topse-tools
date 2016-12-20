@@ -3,9 +3,10 @@ node {
   stage('Housekeeping') {
 
     deleteDir()
-
-    sh 'echo $env.BRANCH_NAME'
-
+    sh 'env > env.txt'
+    readFile('env.txt').split("\r?\n").each {
+        println it
+    }
   }
 
   // The first stage checks out the code from Github
