@@ -13,6 +13,7 @@ node {
   stage('Get Code') {
     sh "nova --help"
     checkout scm
+    sh "find ."
 
   }
 
