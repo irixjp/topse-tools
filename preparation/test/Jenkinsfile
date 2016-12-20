@@ -2,11 +2,12 @@ node {
   // The last stage cleans up the local images and workspace
   stage('Housekeeping') {
 
-    deleteDir()
-    sh 'env > env.txt'
-    readFile('env.txt').split("\r?\n").each {
-        println it
-    }
+    //    deleteDir()
+    //    sh 'env > env.txt'
+    //    readFile('env.txt').split("\r?\n").each {
+    //        println it
+    //    }
+    env.each { name, value -> println "Name: $name -> Value $value" }
   }
 
   // The first stage checks out the code from Github
