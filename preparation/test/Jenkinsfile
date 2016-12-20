@@ -4,19 +4,19 @@ node {
   // The last stage cleans up the local images and workspace
   stage('Housekeeping') {
 
-    //    deleteDir()
-    //    sh 'env > env.txt'
-    //    readFile('env.txt').split("\r?\n").each {
-    //        println it
-    //    }
-    env.each { name, value -> println "Name: $name -> Value $value" }
+    deleteDir()
+    sh "echo ${env.BRANCH_NAME}"
+
   }
 
   // The first stage checks out the code from Github
-  stage 'Get Code'
+  stage('Get Code') {
+    sh "nova --help"
+    checkout scm
+
+  }
 
   // Get some code from a GitHub repository
-  checkout scm
 
 
 }
