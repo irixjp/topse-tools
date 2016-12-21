@@ -1,6 +1,6 @@
 FROM centos:7
 
-LABEL Description="This images is jenkin slave is for a TOPSE class" Version="1.0"
+LABEL Description="This images is jenkin slave is for a TOPSE class" Version="1.2"
 
 MAINTAINER @irix_jp
 
@@ -9,7 +9,7 @@ ARG reposerver_ip
 RUN echo $reposerver_ip reposerver >> /etc/hosts && \
     cat /etc/hosts && \
     rm -Rf /etc/yum.repos.d/* && \
-    curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/edubase.repo && \
+    curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo && \
     yum clean all && \
     yum repolist
 
