@@ -14,6 +14,7 @@ node {
   // Creating VMs
   stage('Build Virtual Machines') {
     dir('preparation/test') {
+      sh 'chmod 600 ansible_key'
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible_hosts -s --private-key=ansible_key as_mkvms.yaml'
     }
   }
