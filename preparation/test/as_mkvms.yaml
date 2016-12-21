@@ -35,7 +35,7 @@
       --ram=8192 \
       --disk /var/lib/libvirt/images/test-rdo-cc.qcow2,format=qcow2 \
       --network network=default \
-      --location=http://ftp.iij.ad.jp/pub/linux/centos/7/os/x86_64/ \
+      --location=http://{{ reposerver_ip }}/openstack/repo/centos7/ \
       --initrd-inject simple-centos7-ks.cfg \
       --extra-args='inst.ks=file:/simple-centos7-ks.cfg console=tty0 console=ttyS0,115200n8 serial'
 
