@@ -1,5 +1,5 @@
 - name: create vms for openstack
-  host: kvm_test_host
+  hosts: kvm_test_host
   vars:
     reposerver_ip: 157.1.141.28
 
