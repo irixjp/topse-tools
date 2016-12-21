@@ -1,0 +1,69 @@
+- name: create vms for openstack
+  host: kvm_test_host
+  vars:
+    reposerver_ip: 157.1.141.28
+
+  tasks:
+  - name: cleanup existing vms
+    shell: |
+      virsh destroy test-rdo-cc
+      virsh destroy test-rdo-compute1
+      virsh destroy test-rdo-compute2
+      virsh undefine test-rdo-cc --remove-all-storage
+      virsh undefine test-rdo-compute1 --remove-all-storage
+      virsh undefine test-rdo-compute2 --remove-all-storage
+      exit 0
+    args:
+      removes: /var/lib/libvirt/images/test-rdo-cc.qcow2
+
+  - name: The preparation /tmp/simple-cent7.cfg before creating vms
+    template: src=simple-centos7-ks.cfg dest=/tmp/simple-centos7-ks.cfg
+    when: reposerver_ip is defined
+
+  - name: create vms
+    shell: |
+      qemu-img create -f qcow2 /var/lib/libvirt/images/test-rdo-cc.qcow2 100G
+      qemu-img create -f qcow2 /var/lib/libvirt/images/test-rdo-compute1.qcow2 100G
+      qemu-img create -f qcow2 /var/lib/libvirt/images/test-rdo-compute2.qcow2 100G
+
+      virt-install \
+      --name=test-rdo-cc \
+      --virt-type kvm --hvm \
+      --accelerate \
+      --nographics --noautoconsole \
+      --vcpus=2 \
+      --ram=8192 \
+      --disk /var/lib/libvirt/images/test-rdo-cc.qcow2,format=qcow2 \
+      --network network=default \
+      --location=http://ftp.iij.ad.jp/pub/linux/centos/7/os/x86_64/ \
+      --initrd-inject simple-centos7-ks.cfg \
+      --extra-args='inst.ks=file:/simple-centos7-ks.cfg console=tty0 console=ttyS0,115200n8 serial'
+
+      virt-install \
+      --name=test-rdo-compute1 \
+      --virt-type kvm --hvm \
+      --accelerate \
+      --nographics --noautoconsole \
+      --vcpus=2 \
+      --ram=8192 \
+      --disk /var/lib/libvirt/images/test-rdo-compute1.qcow2,format=qcow2 \
+      --network network=default \
+      --location=http://ftp.iij.ad.jp/pub/linux/centos/7/os/x86_64/ \
+      --initrd-inject simple-centos7-ks.cfg \
+      --extra-args='inst.ks=file:/simple-centos7-ks.cfg console=tty0 console=ttyS0,115200n8 serial'
+
+      virt-install \
+      --name=test-rdo-compute2 \
+      --virt-type kvm --hvm \
+      --accelerate \
+      --nographics --noautoconsole \
+      --vcpus=2 \
+      --ram=8192 \
+      --disk /var/lib/libvirt/images/test-rdo-compute2.qcow2,format=qcow2 \
+      --network network=default \
+      --location=http://ftp.iij.ad.jp/pub/linux/centos/7/os/x86_64/ \
+      --initrd-inject simple-centos7-ks.cfg \
+      --extra-args='inst.ks=file:/simple-centos7-ks.cfg console=tty0 console=ttyS0,115200n8 serial'
+    args:
+      chdir: /tmp
+

@@ -1,0 +1,8 @@
+Requirements
+
+yum install -y epel-release
+yum install -y qemu-kvm libvirt virt-manager virt-install \
+               libguestfs libguestfs-tools \
+               docker-io \
+               screen tmux
+

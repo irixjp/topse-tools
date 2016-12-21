@@ -3,23 +3,25 @@ import hudson.model.*
 node {
   // The last stage cleans up the local images and workspace
   stage('Housekeeping') {
-
     deleteDir()
-    sh "echo ${env.BRANCH_NAME}"
-
   }
 
   // The first stage checks out the code from Github
   stage('Get Code') {
-    sh "nova --help"
     checkout scm
-    sh "find ."
-    sh "git branch"
-
   }
 
-  // Get some code from a GitHub repository
+  // Creating VMs
+  stage('Build Virtual Machines') {
+    dir('preparation/test') {
+      sh 'ansible-playbook -i ansible_hosts --private-key=ansible_key as_mkvms.yaml'
+    }
+  }
 
+  // Wait 30 sec for boot VMs
+  stage('Retrive IP adress ') {
+
+  }
 
 }
 

@@ -1,0 +1,5 @@
+[localhost]
+127.0.0.1 ansible_connection=local
+
+[kvm_test_host]
+157.1.141.28 ansible_user=sysuser
