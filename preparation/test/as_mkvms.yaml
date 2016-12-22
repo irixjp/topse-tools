@@ -10,9 +10,11 @@
       virsh destroy test-rdo-cc
       virsh destroy test-rdo-compute1
       virsh destroy test-rdo-compute2
+      sleep 3
       virsh undefine test-rdo-cc --remove-all-storage
       virsh undefine test-rdo-compute1 --remove-all-storage
       virsh undefine test-rdo-compute2 --remove-all-storage
+      sleep 3
       exit 0
     args:
       removes: /var/lib/libvirt/images/test-rdo-cc.qcow2
@@ -77,6 +79,6 @@
       do
          virsh list | grep test-rdo
          RET=$?
-         echo "waiting to finish install ..."
-         sleep 1
+         echo -n "#"
+         sleep 5
       done
