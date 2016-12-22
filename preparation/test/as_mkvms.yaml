@@ -70,3 +70,13 @@
     args:
       chdir: /tmp
 
+  - name: waiting to finish install
+    shell: |
+      RET=0
+      while [ "$RET" = "0" ]
+      do
+         virsh list | grep test-rdo
+         RET=$?
+         echo "waiting to finish install ..."
+         sleep 1
+      done
