@@ -2,6 +2,7 @@
   hosts: kvm_test_host
   vars:
     reposerver_ip: 157.1.141.28
+    ansible_key_pub: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0//ez/Kt4Qt7DlDXcALgCNbPj6zxZQ+DMfHHWgE2WBvrmn392pGTjsCium5iSkjWIQW696i0aee1h3M8QfNghreX96iSl8FDhzcg3Sm67Vfi2LRWhaC60eBtIyWz9KC4orIZoWYlBX1trhm5ekpZ+GWdptqMvMOkQN3NUGbtZ+3OWCy19K1BeyVzJicdbVSW5gyvm6fHIMhaxo92+bq+nf2SePU12pPQWvtcrf6B/4s1bcrkEO1r2aVlA6t+qKo4e5DmnU2xe0Jo540LsykytemAUj3e137BTz7cXT1XbGg0CguRsfhj5lQ36M2WEaMRV6EAL76Cao1ZKVODheYHX t-nakajima@mbp2016.local"
 
   tasks:
   - name: cleanup existing vms
@@ -18,7 +19,9 @@
 
   - name: The preparation /tmp/simple-cent7.cfg before creating vms
     template: src=simple-centos7-ks.cfg dest=/tmp/simple-centos7-ks.cfg
-    when: reposerver_ip is defined
+    when:
+      - reposerver_ip is defined
+      - ansible_key_pub is defined
 
   - name: create vms
     shell: |

@@ -27,6 +27,10 @@ DOCKER_STORAGE_OPTIONS="-g /mnt/docker --storage-opt=dm.basesize=100G"
 ```
 
 ```
+systemctl stop firewalld
+systemctl disable firewalld
 systemctl enable docker
 systemctl start  docker
+
+reboot
 ```
