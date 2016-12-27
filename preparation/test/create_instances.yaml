@@ -30,32 +30,32 @@
       - item["ip"] is defined
     with_items: "{{ rdo_hosts }}"
 
-#  - name: create vms
-#    shell: |
-#      qemu-img create -f qcow2 /var/lib/libvirt/images/test-"{{ item['host'] }}".qcow2 100G
-# 
-#      virt-install \
-#      --name=test-"{{ item['host'] }}" \
-#      --virt-type kvm --hvm \
-#      --accelerate \
-#      --nographics --noautoconsole \
-#      --vcpus=2 \
-#      --ram=8192 \
-#      --disk /var/lib/libvirt/images/test-"{{ item['host'] }}".qcow2,format=qcow2 \
-#      --network network=default \
-#      --location=http://{{ reposerver_ip }}/dvd/ \
-#      --initrd-inject simple-centos7-ks-"{{ item['host'] }}".cfg \
-#      --extra-args='inst.ks=file:/simple-centos7-ks-{{ item["host"] }}.cfg console=tty0 console=ttyS0,115200n8 serial'
-#    args:
-#      chdir: /tmp
-#    with_items:  "{{ rdo_hosts }}"
-# 
-#  - name: waiting to finish install
-#    shell: |
-#      RET=0
-#      while [ "$RET" = "0" ]
-#      do
-#         virsh list | grep test-rdo
-#         RET=$?
-#         sleep 5
-#      done
+  - name: create vms
+    shell: |
+      qemu-img create -f qcow2 /var/lib/libvirt/images/test-{{ item['host'] }}.qcow2 100G
+      sleep 2
+      virt-install \
+      --name=test-"{{ item['host'] }}" \
+      --virt-type kvm --hvm \
+      --accelerate \
+      --nographics --noautoconsole \
+      --vcpus=2 \
+      --ram=8192 \
+      --disk /var/lib/libvirt/images/test-"{{ item['host'] }}".qcow2,format=qcow2 \
+      --network network=default \
+      --location=http://{{ reposerver_ip }}/dvd/ \
+      --initrd-inject simple-centos7-ks-"{{ item['host'] }}".cfg \
+      --extra-args='inst.ks=file:/simple-centos7-ks-{{ item["host"] }}.cfg console=tty0 console=ttyS0,115200n8 serial'
+    args:
+      chdir: /tmp
+    with_items:  "{{ rdo_hosts }}"
+ 
+  - name: waiting to finish install
+    shell: |
+      RET=0
+      while [ "$RET" = "0" ]
+      do
+         virsh list | grep test-rdo
+         RET=$?
+         sleep 5
+      done
