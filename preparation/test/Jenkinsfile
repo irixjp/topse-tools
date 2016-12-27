@@ -21,8 +21,9 @@ node {
 
   // Pre-configuration
   stage('Preparation Stage') {
+    dir('preparation/test') {
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -s --private-key=ansible_key pre-configuration.yaml'
+    }
   }
-
 }
 
