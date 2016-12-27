@@ -1,29 +1,15 @@
-- name: retrieve vms ips
-  hosts: kvm_test_host
-  vars_files:
-    - config.yml
-
-  tasks:
-
-  - name: start instances
-    shell: |
-      virsh start test-rdo-cc
-      virsh start test-rdo-compute1
-      virsh start test-rdo-compute2
-      exit 0
-
-- name: waiting to boot instances
+- name: Pre-configurations
   hosts: openstack-all
   vars_files:
-    - config.yml
+    - etc/config.yml
   tasks:
 
   - name: wait insntace boot
-    local_action: wait_for:
+    local_action: wait_for
       host: '{{ inventory_hostname }}'
       port: 22
       state: started
-      delay: 15
+      delay: 10
 
   - name: ping
     ping:

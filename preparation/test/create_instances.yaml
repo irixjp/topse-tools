@@ -1,7 +1,7 @@
 - name: create vms for openstack
   hosts: kvm_test_host
   vars_files:
-    - config.yml
+    - etc/config.yml
 
   tasks:
   - name: cleanup existing vms
@@ -43,7 +43,7 @@
     args:
       chdir: /tmp
     with_items:  "{{ rdo_hosts }}"
- 
+
   - name: waiting to finish install
     shell: |
       RET=0
@@ -53,3 +53,10 @@
          RET=$?
          sleep 5
       done
+
+  - name: start instances
+    shell: |
+      virsh start test-rdo-cc
+      virsh start test-rdo-compute1
+      virsh start test-rdo-compute2
+      exit 0
