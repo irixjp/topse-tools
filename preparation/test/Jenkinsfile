@@ -15,29 +15,28 @@ node {
   // Set dir
   dir('preparation/test') {
 
-    // Preparation
-    stage('Key permission') {
-      sh 'chmod 600 ansible_key'
-    }
-
     // Creating instances
     stage('Build Virtual Machines') {
+      sh 'chmod 600 ansible_key'
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -s --private-key=ansible_key create_instances.yaml'
     }
 
 
     // Pre-configuration
     stage('Preparation Stage') {
+      sh 'chmod 600 ansible_key'
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key pre-configuration.yaml'
     }
 
     // Reboot and wait
     stage('Reboot all nodes') {
+      sh 'chmod 600 ansible_key'
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key reboot.yaml'
     }
 
     // Pre-testing
     stage('Pre-testing') {
+      sh 'chmod 600 ansible_key'
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key test-pre-configurations.yaml'
     }
 
