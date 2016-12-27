@@ -1,7 +1,7 @@
 - name: retrieve vms ips
   hosts: kvm_test_host
-  vars:
-    reposerver_ip: 157.1.141.28
+  vars_files:
+    - config.yml
 
   tasks:
 
@@ -27,3 +27,68 @@
   - name: ping
     ping:
 
+  - name: reposerver ip to hosts file
+    lineinfile: >
+      dest=/etc/hosts
+      line='{{ reposerver_ip }} reposerver'
+
+  - name: set repositry
+    shell: |
+      mkdir -p /root/temp
+      mv /etc/yum.repos.d/* /root/temp
+      curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+      yum clean all
+      yum repolist
+    args:
+      creates: /etc/yum.repos.d/edubase.repo
+
+  - name: install wget
+    yum: name="{{ item }}" state=latest
+    with_items:
+      - wget
+      - crudini
+      - vim
+
+  - name: update all packages
+    yum: name=* state=latest
+
+  - name: clean repo
+    shell: |
+      rm -f /etc/yum.repos.d/CentOS*
+      rm -f /etc/yum.repos.d/epel*
+
+  - name: enable nested kvm
+    shell: |
+      echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
+      modprobe -r kvm_intel
+      modprobe kvm_intel
+    args:
+      creates: /etc/modprobe.d/kvm-nested.conf
+
+  - name: enable ip forwarding
+    template: >
+      src=template_00-system.conf
+      dest=/usr/lib/sysctl.d/00-system.conf
+      owner=root
+      group=root
+      mode=0644
+
+  - name: create dirs
+    shell: |
+      mkdir -p /mnt/{nova,glance,cinder,swift}
+      mkdir -p /var/lib/{nova,glance,cinder}
+      mkdir -p /srv
+
+  - name: add mount points
+    lineinfile: >
+      dest=/etc/fstab
+      line='/mnt/{{ item }}    /var/lib/{{ item }}    none  bind   0 0'
+    with_items:
+      - nova
+      - glance
+      - cinder
+
+  - name: add mount point swift
+    lineinfile: >
+      dest=/etc/fstab
+      line='/mnt/swift   /srv             none  bind   0 0'
