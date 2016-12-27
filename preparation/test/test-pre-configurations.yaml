@@ -1,0 +1,95 @@
+- name: Test Pre-configurations
+  hosts: openstack-all
+  vars_files:
+    - etc/config.yaml
+  tasks:
+
+  - name: ping
+    ping:
+
+  - name: connect to reposerver with the NAME(non-IP)
+    shell: |
+      ping -c 1 reposerver
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: repositry settings
+    shell: |
+      yum repolist | grep openstack
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed wget
+    shell: |
+      wget --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed crudini
+    shell: |
+      crudini --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed vim
+    shell: |
+      vim --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed kvm
+    shell: |
+      /usr/libexec/qemu-kvm --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+
+
+# 
+#  - name: enable nested kvm
+#    shell: |
+#      echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
+#      modprobe -r kvm_intel
+#      modprobe kvm_intel
+#    args:
+#      creates: /etc/modprobe.d/kvm-nested.conf
+# 
+#  - name: enable ip forwarding
+#    template: >
+#      src=template_00-system.conf
+#      dest=/usr/lib/sysctl.d/00-system.conf
+#      owner=root
+#      group=root
+#      mode=0644
+# 
+#  - name: create dirs
+#    shell: |
+#      mkdir -p /mnt/{nova,glance,cinder,swift}
+#      mkdir -p /var/lib/{nova,glance,cinder}
+#      mkdir -p /srv
+# 
+#  - name: add mount points
+#    lineinfile: >
+#      dest=/etc/fstab
+#      line='/mnt/{{ item }}    /var/lib/{{ item }}    none  bind   0 0'
+#    with_items:
+#      - nova
+#      - glance
+#      - cinder
+# 
+#  - name: add mount point swift
+#    lineinfile: >
+#      dest=/etc/fstab
+#      line='/mnt/swift   /srv             none  bind   0 0'

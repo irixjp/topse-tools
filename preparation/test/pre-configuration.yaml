@@ -1,15 +1,11 @@
 - name: Pre-configurations
   hosts: openstack-all
   vars_files:
-    - etc/config.yml
+    - etc/config.yaml
   tasks:
 
-  - name: wait insntace boot
-    local_action: wait_for
-      host: '{{ inventory_hostname }}'
-      port: 22
-      state: started
-      delay: 10
+  - name: wait for SSH port up
+    local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=10 timeout=300
 
   - name: ping
     ping:
@@ -35,6 +31,7 @@
       - wget
       - crudini
       - vim
+      - qemu-kvm
 
   - name: update all packages
     yum: name=* state=latest

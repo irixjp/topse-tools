@@ -31,13 +31,15 @@ node {
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key pre-configuration.yaml'
     }
 
-    // Pre-configuration
-    stage('Preparation Stage') {
-      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key pre-configuration.yaml'
-    }
     // Reboot and wait
-    stage('Preparation Stage') {
-      //  sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key reboot.yaml'
+    stage('Reboot all nodes') {
+      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key reboot.yaml'
     }
+
+    // Pre-testing
+    stage('Pre-testing') {
+      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key test-pre-configurations.yaml'
+    }
+
   }
 }
