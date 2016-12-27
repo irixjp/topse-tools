@@ -15,13 +15,13 @@ node {
   stage('Build Virtual Machines') {
     dir('preparation/test') {
       sh 'chmod 600 ansible_key'
-      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -s --private-key=ansible_key as_mkvms.yaml'
+      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -s --private-key=ansible_key create_instances.yaml'
     }
   }
 
   // Waiting and Preparation
 //  stage('Waiting instance and Preparation') {
-//      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -s --private-key=ansible_key as_preconfig_vms.yaml'
+//      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -s --private-key=ansible_key pre-configuration.yaml'
 //  }
 
 }

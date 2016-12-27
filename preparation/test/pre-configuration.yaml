@@ -14,12 +14,6 @@
       group: root
       mode: 0644
 
-  - name: add keypair.pub to instances
-    shell: |
-      virt-customize -d test-rdo-cc       --ssh-inject root:file:/tmp/ansible_key.pub
-      virt-customize -d test-rdo-compute1 --ssh-inject root:file:/tmp/ansible_key.pub
-      virt-customize -d test-rdo-compute2 --ssh-inject root:file:/tmp/ansible_key.pub
-
   - name: start instances
     shell: |
       virsh start test-rdo-cc
