@@ -34,6 +34,7 @@
       --nographics --noautoconsole \
       --vcpus=2 \
       --ram=8192 \
+      --cpu host \
       --disk /var/lib/libvirt/images/test-"{{ item['host'] }}".qcow2,format=qcow2 \
       --network network=default \
       --location=http://{{ reposerver_ip }}/dvd/ \

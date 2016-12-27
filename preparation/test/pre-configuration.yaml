@@ -19,7 +19,7 @@
   tasks:
 
   - name: wait insntace boot
-    wait_for:
+    local_action: wait_for:
       host: '{{ inventory_hostname }}'
       port: 22
       state: started
