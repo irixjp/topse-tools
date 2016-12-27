@@ -2,34 +2,15 @@
   hosts: kvm_test_host
   vars:
     reposerver_ip: 157.1.141.28
-    virtbrif: /var/lib/libvirt/dnsmasq/virbr0.status
 
   tasks:
-
-  - name: copy keypair.pub to KVM server
-    copy:
-      src: ansible_key.pub
-      dest: /tmp/ansible_key.pub
-      owner: root
-      group: root
-      mode: 0644
 
   - name: start instances
     shell: |
       virsh start test-rdo-cc
       virsh start test-rdo-compute1
       virsh start test-rdo-compute2
-
-  - name: retrieve ips
-    shell: |
-      cat '{{ virtbrif }}'
-    register: vms_ips
-
-  - name: add host to inventory
-    add_host:
-      name: '{{ item["ip-address"] }}'
-      group: openstack-all
-    with_items: "{{ vms_ips.stdout }}"
+      exit 0
 
 - name: waiting to boot instances
   hosts: openstack-all
@@ -41,7 +22,7 @@
       host: '{{ inventory_hostname }}'
       port: 22
       state: started
-      delay: 30
+      delay: 15
 
   - name: ping
     ping:

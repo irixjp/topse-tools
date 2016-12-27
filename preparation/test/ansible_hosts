@@ -3,3 +3,15 @@
 
 [kvm_test_host]
 157.1.141.28 ansible_user=sysuser
+
+[openstack-all]
+192.168.100.100
+192.168.100.101
+192.168.100.102
+
+[openstack-cc]
+192.168.100.100
+
+[openstack-compute]
+192.168.100.101
+192.168.100.102
