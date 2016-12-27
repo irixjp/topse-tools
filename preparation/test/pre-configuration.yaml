@@ -14,7 +14,8 @@
 
 - name: waiting to boot instances
   hosts: openstack-all
-  gather_facts: False
+  vars_files:
+    - config.yml
   tasks:
 
   - name: wait insntace boot
