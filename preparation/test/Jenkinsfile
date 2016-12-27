@@ -23,7 +23,7 @@ node {
   stage('Preparation Stage') {
     dir('preparation/test') {
       sh 'chmod 600 ansible_key'
-      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -s --private-key=ansible_key pre-configuration.yaml'
+      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -u root --private-key=ansible_key pre-configuration.yaml'
     }
   }
 }
