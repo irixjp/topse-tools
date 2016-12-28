@@ -1,0 +1,12 @@
+- name: OpenStack Installation
+  hosts: openstack-all
+  vars_files:
+  - etc/config.yaml
+  tasks:
+  - name: install openstack-packstack
+    yum: name=openstack-packstack state=latest
+
+  - name: create answer file
+    shell: |
+      packstack --dry-run --allinone --default-password='{{ password }}' --provision-demo=n --gen-answer-file=/root/answer.txt
+

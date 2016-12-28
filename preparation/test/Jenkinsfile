@@ -40,5 +40,11 @@ node {
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key test-pre-configurations.yaml'
     }
 
+    // setup openstack
+    //stage('setup openstack') {
+    //  sh 'chmod 600 ansible_key'
+    //  sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key configuration-openstack.yaml'
+    //}
+
   }
 }

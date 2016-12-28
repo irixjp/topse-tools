@@ -76,3 +76,27 @@
     lineinfile: >
       dest=/etc/fstab
       line='/mnt/swift   /srv             none  bind   0 0'
+
+  - name: put private ssh key
+    copy:
+      src: ansible_key
+      dest: /root/.ssh/id_rsa
+      owner: root
+      group: root
+      mode: 0600
+
+  - name: put public ssh key
+    copy:
+      src: ansible_key.pub
+      dest: /root/.ssh/id_rsa.pub
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: restorecon
+    shell: |
+      restorecon -Rvv /root/.ssh
+
+  - name: add pub key to authorized_keys
+    shell: |
+      cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
