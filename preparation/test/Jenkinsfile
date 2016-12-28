@@ -21,7 +21,6 @@ node {
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -s --private-key=ansible_key create_instances.yaml'
     }
 
-
     // Pre-configuration
     stage('Preparation Stage') {
       sh 'chmod 600 ansible_key'
