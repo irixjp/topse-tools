@@ -1,0 +1,14 @@
+DEVICE=br-ex
+NM_CONTROLLED=no
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSBridge
+BOOTPROTO=none
+IPADDR="{{ rdo_hosts[0].ip }}"
+PREFIX=24
+GATEWAY="{{ gateway }}"
+DEFROUTE=yes
+IPV4_FAILURE_FATAL=yes
+IPV6INIT=no
+ARPCHECK=no
+DNS1="{{ dns_server }}"

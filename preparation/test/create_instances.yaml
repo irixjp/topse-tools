@@ -14,7 +14,9 @@
     with_items: "{{ rdo_hosts }}"
 
   - name: The preparation /tmp/simple-cent7-ks-xxx.cfg before creating vms
-    template: src=template_simple-centos7-ks.cfg dest=/tmp/simple-centos7-ks-{{ item["host"] }}.cfg
+    template: >
+      src=template/simple-centos7-ks.cfg
+      dest=/tmp/simple-centos7-ks-{{ item["host"] }}.cfg
     when:
       - reposerver_ip is defined
       - ansible_key_pub is defined
