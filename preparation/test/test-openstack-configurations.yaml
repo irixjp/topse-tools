@@ -1,0 +1,113 @@
+- name: Test OpenStack configurations
+  hosts: openstack-cc
+  vars_files:
+    - etc/config.yaml
+  tasks:
+
+  - name: ping
+    ping:
+
+  - name: connect to reposerver with the NAME(non-IP)
+    shell: |
+      ping -c 1 reposerver
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: repositry settings
+    shell: |
+      yum repolist | grep openstack
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed wget
+    shell: |
+      wget --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed crudini
+    shell: |
+      crudini --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed vim
+    shell: |
+      vim --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed kvm
+    shell: |
+      /usr/libexec/qemu-kvm --version
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: nested on
+    shell: |
+      cat /sys/module/kvm_intel/parameters/nested
+    register: ret
+  - assert:
+      that:
+        - "'Y' in ret.stdout"
+
+  - name: sysctl parameter
+    shell: |
+      sysctl net.ipv4.ip_forward
+      sysctl net.ipv4.conf.all.rp_filter
+      sysctl net.ipv4.conf.default.rp_filter
+    register: ret
+  - assert:
+      that:
+        - "'net.ipv4.ip_forward = 1' in ret.stdout_lines[0]"
+#        - "'net.ipv4.conf.all.rp_filter = 0' in ret.stdout_lines[1]"
+#        - "'net.ipv4.conf.default.rp_filter = 0' in ret.stdout_lines[2]"
+
+  - name: mount point for nova
+    shell: |
+      mount | grep /var/lib/nova
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: mount point for glance
+    shell: |
+      mount | grep /var/lib/glance
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: mount point for cinder
+    shell: |
+      mount | grep /var/lib/cinder
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: mount point for swift
+    shell: |
+      mount | grep /srv
+    register: ret
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: ssh connection test each nodes
+    shell:
+      ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@{{ item['ip'] }} hostname
+    with_items: "{{ rdo_hosts }}"

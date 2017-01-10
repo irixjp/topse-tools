@@ -40,6 +40,9 @@
     shell: setenforce 0; exit 0
     ignore_errors: True
 
+  - name: install openstack-config command
+    yum: name=openstack-utils state=latest
+
 - name: exec packstack
   hosts: openstack-cc
   vars_files:

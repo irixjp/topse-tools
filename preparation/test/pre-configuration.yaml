@@ -33,6 +33,7 @@
       - crudini
       - vim
       - qemu-kvm
+      - bash-completion
 
   - name: update all packages
     yum: name=* state=latest
