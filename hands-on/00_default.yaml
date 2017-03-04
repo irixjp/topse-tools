@@ -19,7 +19,7 @@ parameters:
     type: string
     label: Security group name
     description: Security group name.
-    default: sg-for-all
+    default: open-all
 
   private_network_name:
     type: string
