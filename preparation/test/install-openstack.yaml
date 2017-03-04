@@ -55,13 +55,13 @@
   - name: edit nova.conf
     shell: |
       openstack-config --set /etc/nova/nova.conf DEFAULT api_rate_limit false
-      openstack-config --set /etc/nova/nova.conf DEFAULT vnc_enabled true
       openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_host 0.0.0.0
       openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_port 6080
-      openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_base_url http://{{ ctl_host }}:6080/vnc_auto.html
-      openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_listen 0.0.0.0
-      openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_proxyclient_address {{ ctl_host }}
-      openstack-config --set /etc/nova/nova.conf DEFAULT vnc_keymap ja
+      openstack-config --set /etc/nova/nova.conf vnc enabled true
+      openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://{{ ctl_host }}:6080/vnc_auto.html
+      openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+      openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address {{ ctl_host }}
+      openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
       openstack-config --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32
       openstack-config --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 5
       openstack-config --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 3
@@ -110,11 +110,11 @@
   tasks:
   - name: edit nova.conf
     shell: |
-      openstack-config --set /etc/nova/nova.conf DEFAULT vnc_enabled true
-      openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_base_url http://{{ ctl_host }}:6080/vnc_auto.html
-      openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_listen 0.0.0.0
-      openstack-config --set /etc/nova/nova.conf DEFAULT vncserver_proxyclient_address {{ ansible_eth0.ipv4.address }}
-      openstack-config --set /etc/nova/nova.conf DEFAULT vnc_keymap ja
+      openstack-config --set /etc/nova/nova.conf vnc enabled true
+      openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://{{ ctl_host }}:6080/vnc_auto.html
+      openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+      openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address {{ ansible_eth0.ipv4.address }}
+      openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
       openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
       openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
       openstack-config --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32

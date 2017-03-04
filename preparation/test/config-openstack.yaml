@@ -1,0 +1,52 @@
+- name: OpenStack Installation
+  hosts: openstack-cc
+  vars_files:
+  - etc/config.yaml
+  tasks:
+  - name: create public network
+    shell: |
+      cd /root
+      source keystonerc_admin
+
+      FIP_START=192.168.100.151
+      FIP_END=192.168.100.200
+      FIP_CIDR=192.168.100.0/24
+      EXT_GW=192.168.100.254
+
+      neutron net-create --router:external public
+      neutron subnet-create --name public-subnet \
+      --allocation-pool start=${FIP_START},end=${FIP_END} \
+      --disable-dhcp \
+      --gateway ${EXT_GW} \
+      public ${FIP_CIDR}
+
+  - name: delete flavor
+    shell: |
+      nova flavor-delete 1
+      nova flavor-delete 2
+      nova flavor-delete 3
+      nova flavor-delete 4
+      nova flavor-delete 5
+
+  - name: create flavor
+    shell: |
+      nova flavor-create m1.tiny   100 1024 10  1
+      nova flavor-create m1.small  101 2048 10  1
+      nova flavor-create m1.medium 102 4096 20  1
+      nova flavor-create m1.large  103 8192 100 2
+      nova flavor-create m1.xlarge 104 8192 200 4
+
+  - name: update quota
+    shell: |
+      nova quota-class-update --instances    5 default
+      nova quota-class-update --floating_ips 2 default
+      nova quota-defaults
+
+  - name: upload images
+    shell: |
+      glance --os-image-api-version 1 image-create \
+      --name "cirros" \
+      --disk-format qcow2 --container-format bare \
+      --copy-from http://reposerver/images/cirros-x86_64-disk.img \
+      --is-public True --is-protected True \
+      --progress

@@ -49,8 +49,30 @@ ENV OS_OS_REGION_NAME RegionOne
 ENV OS_TENANT_NAME admin
 ENV OS_USERNAME admin
 ENV OS_PASSWORD password
+ENV OS_AUTH_VERSION v3
 
 CMD cd /root/tempest && \
     tempest init workdir && \
     cd workdir && \
+    crudini --set etc/tempest.conf auth admin_username $OS_USERNAME && \
+    crudini --set etc/tempest.conf auth admin_password $OS_PASSWORD && \
+    crudini --set etc/tempest.conf auth admin_project_name $OS_USERNAME && \
+    crudini --set etc/tempest.conf auth admin_domain_name default && \
+    crudini --set etc/tempest.conf identity uri $OS_AUTH_URL/v2.0 && \
+    crudini --set etc/tempest.conf identity uri_v3 $OS_AUTH_URL/v3 && \
+    crudini --set etc/tempest.conf identity region $OS_OS_REGION_NAME && \
+    crudini --set etc/tempest.conf identity auth_version $OS_AUTH_VERSION && \
+    crudini --set etc/tempest.conf service_available cinder yes && \
+    crudini --set etc/tempest.conf service_available neutron yes && \
+    crudini --set etc/tempest.conf service_available glance yes && \
+    crudini --set etc/tempest.conf service_available swift yes && \
+    crudini --set etc/tempest.conf service_available nova yes && \
+    crudini --set etc/tempest.conf service_available heat yes && \
+    crudini --set etc/tempest.conf service_available horizon yes && \
+    crudini --set etc/tempest.conf service_available ceilometer no && \
+    crudini --set etc/tempest.conf service_available sahara false && \
+    crudini --set etc/tempest.conf service_available ironic false && \
+    crudini --set etc/tempest.conf dashboard dashboard_url ${OS_AUTH_URL}/  && \
+    crudini --set etc/tempest.conf dashboard login_url ${$OS_AUTH_URL}/auth/login  && \
+    supervisord -n
     

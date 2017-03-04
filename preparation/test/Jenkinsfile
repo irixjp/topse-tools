@@ -39,16 +39,10 @@ node {
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key test-pre-configurations.yaml'
     }
 
-    // setup openstack
-    stage('setup openstack') {
+    // install openstack
+    stage('install openstack') {
       sh 'chmod 600 ansible_key'
-      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key configuration-openstack.yaml'
-    }
-
-    // Test openstack installation and configuration
-    stage('setup openstack') {
-      sh 'chmod 600 ansible_key'
-      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key test-openstack.yaml'
+      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key install-openstack.yaml'
     }
 
     // Reboot and wait
@@ -57,11 +51,18 @@ node {
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key reboot.yaml'
     }
 
-    // Test openstack configuration
+    // basic openstack configuration
+    stage('OpenStack testing') {
+      sh 'chmod 600 ansible_key'
+      sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key config-openstack.yaml'
+    }
+
+    // 
     stage('OpenStack testing') {
       sh 'chmod 600 ansible_key'
       sh 'ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i etc/ansible_hosts -u root --private-key=ansible_key test-openstack-configurations.yaml'
     }
+
 
   }
 }
