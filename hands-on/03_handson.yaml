@@ -135,12 +135,15 @@ resources:
             rm -f /etc/yum.repos.d/epel*
             curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
             yum clean all
-            yum install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli
+            yum install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
             systemctl enable target.service
             systemctl start target.service
             yum install -y iscsi-initiator-utils
             systemctl enable iscsid.service
             systemctl start iscsid.service
+            yum install -y httpd
+            systemctl enable httpd.service
+            systemctl start httpd.service
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig

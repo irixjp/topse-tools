@@ -1,5 +1,9 @@
-export OS_AUTH_URL=http://y.y.y.y:5000/v2.0
+export OS_TENANT_NAME=tenant-XXXXXX
+export OS_USERNAME=student-XXXXXX
+export OS_PASSWORD=pass-XXXXXX
+export OS_AUTH_URL=http://Y.Y.Y.Y:5000/v3
 export OS_REGION_NAME=RegionOne
-export OS_TENANT_NAME=tenant-xxxxx
-export OS_USERNAME=student-xxxxx
-export OS_PASSWORD=xxxxx
+export OS_VOLUME_API_VERSION=2
+export OS_IDENTITY_API_VERSION=3
+export OS_USER_DOMAIN_NAME=${OS_USER_DOMAIN_NAME:-"Default"}
+export OS_PROJECT_DOMAIN_NAME=${OS_PROJECT_DOMAIN_NAME:-"Default"}
