@@ -75,16 +75,27 @@ resources:
       security_groups:
         - { get_param: sec_group }
 
-  floating_ip:
+  floating_ip1:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: { get_param: public_network }
 
-  floating_ip_assoc:
+  floating_ip2:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_network }
+
+  floating_ip_assoc1:
     type: OS::Neutron::FloatingIPAssociation
     properties:
-      floatingip_id: { get_resource: floating_ip }
+      floatingip_id: { get_resource: floating_ip1 }
       port_id: { get_resource: neutron-port1 }
+
+  floating_ip_assoc2:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip2 }
+      port_id: { get_resource: neutron-port2 }
 
   passwd:
     type: OS::Heat::RandomString
@@ -115,6 +126,7 @@ resources:
             rm -f /etc/yum.repos.d/epel*
             curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
             yum clean all
+            yum repolist
 
   config_init_config:
     type: OS::Heat::SoftwareConfig
@@ -185,13 +197,13 @@ outputs:
     value:
       name: { get_attr: [ instance1, name ] }
       ip_address: { get_attr: [ neutron-port1, fixed_ips, 0, ip_address ] }
-      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+      floating_ip: { get_attr: [floating_ip1, floating_ip_address] }
   instance2:
     description: server information
     value:
       name: { get_attr: [ instance2, name ] }
       ip_address: { get_attr: [ neutron-port2, fixed_ips, 0, ip_address ] }
-      floating_ip: "none"
+      floating_ip: { get_attr: [floating_ip2, floating_ip_address] }
   password:
     description: server password for user "centos"
     value: { get_attr: [ passwd, value] }
