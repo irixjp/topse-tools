@@ -8,30 +8,6 @@ parameters:
     label: hands-on repository server
     description: Teahcer will gives the specific ip address.
 
-  image1:
-    type: string
-    label: Image name or ID
-    description: Image to be used for the server.
-    default: CentOS7
-
-  image2:
-    type: string
-    label: Image name or ID
-    description: Image to be used for the server.
-    default: Docker
-
-  flavor1:
-    type: string
-    label: Flavor
-    description: Type of instance (flavor) to be used on the compute instance.
-    default: m1.small
-
-  flavor1:
-    type: string
-    label: Flavor
-    description: Type of instance (flavor) to be used on the compute instance.
-    default: m1.large
-
   public_network:
     type: string
     label: Public network name or ID
@@ -63,14 +39,6 @@ parameters:
   ip2:
     type: string
     default: 192.168.199.40
-
-  name1:
-    type: string
-    default: handson5-virt
-
-  name2:
-    type: string
-    default: handson5-docker
 
 resources:
   wait_handle:
@@ -190,9 +158,9 @@ resources:
   instance1:
     type: OS::Nova::Server
     properties:
-      name: { get_param: name1 }
-      image: { get_param: image1 }
-      flavor: { get_param: flavor1 }
+      name: handson5-virt
+      image: CentOS7
+      flavor: m1.large
       key_name: { get_resource: key_pair }
       networks:
         - port: { get_resource: neutron-port1 }
@@ -202,9 +170,9 @@ resources:
   instance2:
     type: OS::Nova::Server
     properties:
-      name: { get_param: name2 }
-      image: { get_param: image2 }
-      flavor: { get_param: flavor2 }
+      name: handson5-docker
+      image: Docker
+      flavor: m1.small
       key_name: { get_resource: key_pair }
       networks:
         - port: { get_resource: neutron-port2 }
