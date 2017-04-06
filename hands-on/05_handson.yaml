@@ -49,7 +49,7 @@ resources:
     properties:
       handle: { get_resource: wait_handle }
       count: 2
-      timeout: 600
+      timeout: 900
 
   key_pair:
     type: OS::Nova::KeyPair
@@ -138,6 +138,7 @@ resources:
         virsh net-destroy default
         virsh net-undefine default
         systemctl restart libvirtd
+        yum groupinstall -y "MATE Desktop"
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
@@ -149,6 +150,7 @@ resources:
           template: |
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            reboot
 
   server_init1:
     type: OS::Heat::MultipartMime
