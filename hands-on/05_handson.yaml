@@ -138,7 +138,7 @@ resources:
         virsh net-destroy default
         virsh net-undefine default
         systemctl restart libvirtd
-        yum groupinstall -y "MATE Desktop"
+        yum groupinstall -y "GNOME Desktop"
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
