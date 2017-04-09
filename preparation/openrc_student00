@@ -7,4 +7,4 @@ export OS_VOLUME_API_VERSION=2
 export OS_IDENTITY_API_VERSION=3
 export OS_USER_DOMAIN_NAME=${OS_USER_DOMAIN_NAME:-"Default"}
 export OS_PROJECT_DOMAIN_NAME=${OS_PROJECT_DOMAIN_NAME:-"Default"}
-export PS1='[\u@\h \W(teacher01)]\$ '
+export PS1='[\u@\h \W(student-000000)]\$ '

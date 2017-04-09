@@ -28,7 +28,7 @@ parameters:
     type: string
     label: Image name or ID
     description: Image to be used for the server.
-    default: CentOS7-1603
+    default: CentOS7
 
   flavor:
     type: string
@@ -128,7 +128,7 @@ resources:
             echo "wc_reposerver_ip reposerver" >> /etc/hosts
             mv /etc/yum.repos.d/* /root/temp
             cd /etc/yum.repos.d
-            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/centos7/edubase-kilo.repo
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
             yum clean all
             yum repolist
             yum update -y
