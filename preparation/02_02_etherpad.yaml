@@ -28,7 +28,7 @@ parameters:
     type: string
     label: Image name or ID
     description: Image to be used for the server.
-    default: CentOS7
+    default: Docker
 
   flavor:
     type: string
@@ -118,9 +118,6 @@ resources:
             wc_external_ip: { get_attr: [floating_ip, floating_ip_address] }
           template: |
             #!/bin/bash -ex
-            setenforce 0
-            sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
-
             ################
             ## set repogitry
             ################
@@ -131,146 +128,9 @@ resources:
             curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
             yum clean all
             yum repolist
-            yum update -y
-
-            ################
-            ## Install dependency packages
-            ################
-            yum install -y wget git crudini vim nodejs npm mariadb mariadb-server nginx
-
-            ################
-            ## MariaDB
-            ################
-            crudini --set /etc/my.cnf.d/server.cnf mysqld character-set-server utf8
-            crudini --set /etc/my.cnf.d/client.cnf client default-character-set utf8
-            systemctl enable mariadb.service
-            systemctl start  mariadb.service
-
-            mysqladmin -u root password 'password'
-
-            cat << EOF > /tmp/sql.txt
-            DELETE FROM mysql.user WHERE user = '' OR ( user = 'root' AND host != 'localhost' );
-            FLUSH PRIVILEGES;
-            CREATE DATABASE epdb CHARACTER SET utf8;
-            GRANT ALL PRIVILEGES ON epdb.* TO 'epuser'@'%' IDENTIFIED BY 'eppasswd';
-            FLUSH PRIVILEGES;
-            SELECT user, password, host FROM mysql.user;
-            EOF
-
-            mysql -uroot -ppassword < /tmp/sql.txt
-
-            ################
-            ## Etherpad
-            ################
-            mkdir -p /opt
-            useradd -d /opt/etherpad etherpad
-
-            su - etherpad -c 'git clone https://github.com/ether/etherpad-lite.git; cd etherpad-lite; git checkout -b 1.5.7 remotes/origin/release/1.5.7'
-            su - etherpad -c 'cd /opt/etherpad/etherpad-lite; sh bin/installDeps.sh'
-
-            cat << EOF > /usr/lib/systemd/system/etherpad.service
-            [Unit]
-            Description=Run Etherpad-lite, the collaborative editor.
-            After=syslog.target network.target
-
-            [Service]
-            Type=simple
-            User=etherpad
-            Group=etherpad
-            ExecStart=/opt/etherpad/etherpad-lite/bin/run.sh
-
-            [Install]
-            WantedBy=multi-user.target
-            EOF
-
-            cat << EOF > /opt/etherpad/etherpad-lite/settings.json
-            {
-              "title": "Etherpad",
-              "favicon": "favicon.ico",
-              "ip": "0.0.0.0",
-              "port" : 9001,
-              "dbType" : "mysql",
-              "dbSettings" : {
-                "user"    : "epuser",
-                "host"    : "localhost",
-                "password": "eppasswd",
-                "database": "epdb"
-                },
-              "defaultPadText" : "",
-              "padOptions": {
-                "noColors": false,
-                "showControls": true,
-                "showChat": true,
-                "showLineNumbers": true,
-                "useMonospaceFont": true,
-                "userName": false,
-                "userColor": false,
-                "rtl": false,
-                "alwaysShowChat": false,
-                "chatAndUsers": false,
-                "lang": "en-gb"
-                },
-              "suppressErrorsInPadText" : false,
-              "requireSession" : false,
-              "editOnly" : false,
-              "sessionNoPassword" : false,
-              "minify" : true,
-              "maxAge" : 21600,
-              "abiword" : null,
-              "tidyHtml" : null,
-              "allowUnknownFileEnds" : true,
-              "requireAuthentication" : false,
-              "requireAuthorization" : false,
-              "trustProxy" : false,
-              "disableIPlogging" : false,
-              "socketTransportProtocols" : ["xhr-polling", "jsonp-polling", "htmlfile"],
-              "loadTest": false,
-              "loglevel": "INFO",
-              "logconfig" :
-                { "appenders": [
-                  { "type": "console" }
-                  ]
-                }
-              }
-            EOF
-
-            systemctl enable etherpad.service
-            systemctl start  etherpad.service
-
-            ################
-            ## Nginx
-            ################
-            FIP=wc_external_ip
-            cat << EOF > /etc/nginx/conf.d/eplite.conf
-            server {
-              listen       80;
-              server_name  ${FIP};
-
-              access_log  /var/log/nginx/eplite.access.log;
-              error_log   /var/log/nginx/eplite.error.log;
-
-              location / {
-              proxy_pass             http://localhost:9001/;
-              proxy_set_header       Host \$host;
-              proxy_pass_header Server;
-              proxy_buffering off;
-              proxy_set_header X-Real-IP \$remote_addr;
-              proxy_set_header Host \$host;
-              proxy_http_version 1.1;
-              proxy_set_header Upgrade \$http_upgrade;
-              proxy_set_header Connection \$connection_upgrade;
-
-              }
-            }
-
-            map \$http_upgrade \$connection_upgrade {
-              default upgrade;
-              ''      close;
-              }
-            EOF
-
-            systemctl enable nginx.service
-            systemctl start  nginx.service
+            docker run -itd --name epmysql --expose 3306 enakai00/epmysql:ver1.0
+            sleep 10
+            docker run -itd --name eplite -p 80:80 -e FIP=wc_external_ip --link epmysql:db enakai00/eplite:ver1.0
             echo "### finish!! ###"
 
   config_send_notify_after_settings:
