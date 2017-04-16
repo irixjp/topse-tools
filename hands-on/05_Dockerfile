@@ -1,0 +1,17 @@
+FROM centos:7
+
+LABEL Description="This images is an example of Hands-on5"
+
+MAINTAINER your_name
+
+RUN echo xxx.xxx.xxx.xxx reposerver >> /etc/hosts && cat /etc/hosts && \
+    rm -Rf /etc/yum.repos.d/* && \
+    curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo && \
+    yum clean all && yum repolist && \
+    yum install -y httpd 
+
+RUN echo "This is your_name's page" >> /var/www/html/index.html
+
+EXPOSE 80
+
+CMD /sbin/httpd -DFOREGROUND
