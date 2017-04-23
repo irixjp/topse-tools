@@ -2,10 +2,10 @@
 
 mkdir -p /root/temp
 
-echo "157.1.205.1 reposerver" >> /etc/hosts
+echo "xxx.xxx.xxx.xxx reposerver" >> /etc/hosts
 
 rm -f /etc/yum.repos.d/*
-curl -o /etc/yum.repos.d/edubase.repo http://reposerver/openstack/repo/centos7/edubase-kilo.repo
+curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
 yum clean all
 yum repolist
 
