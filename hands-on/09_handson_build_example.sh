@@ -44,21 +44,21 @@ neutron subnet-create --name public-subnet \
         --gateway 172.16.100.254 \
         public 172.16.100.0/24
 
-echo "## creating public networ"
+echo "## creating keypair"
 openstack keypair create temp-key-1 | tee /root/temp-key-1.pem
 chmod 600 /root/temp-key-1.pem
 
 echo "## creating security group"
-neutron security-group-create open_all --description "allow all communications"
+neutron security-group-create open-all --description "allow all communications"
 neutron security-group-rule-create --direction ingress --ethertype IPv4 \
         --protocol icmp \
-        --remote-ip-prefix 0.0.0.0/0 open_all
+        --remote-ip-prefix 0.0.0.0/0 open-all
 neutron security-group-rule-create --direction ingress --ethertype IPv4 \
         --protocol tcp --port-range-min 1 --port-range-max 65535 \
-        --remote-ip-prefix 0.0.0.0/0 open_all
+        --remote-ip-prefix 0.0.0.0/0 open-all
 neutron security-group-rule-create --direction ingress --ethertype IPv4 \
         --protocol udp --port-range-min 1 --port-range-max 65535 \
-        --remote-ip-prefix 0.0.0.0/0 open_all
+        --remote-ip-prefix 0.0.0.0/0 open-all
 
 echo "## creating routers"
 neutron router-create Ext-Router
@@ -90,7 +90,7 @@ export MY_3RD_NET=`neutron net-show 3rd-net   -c id | get_uuid`
 sleep 3
 
 echo "## creating boot volume"
-IMAGEID=`glance image-show "Fedora23-20151030" | get_uuid`
+IMAGEID=`glance image-show "CentOS7" | get_uuid`
 cinder create --display-name boot-vol --image-id $IMAGEID 10
 
 wait_volume boot-vol
@@ -104,20 +104,20 @@ cinder create --snapshot-id $SNAPID --display-name copy-snap-vol 10
 
 
 echo "## booting instance"
-nova boot --flavor my.standard --image "Fedora23-20151030" \
---key-name temp-key-1 --security-groups open_all \
+nova boot --flavor my.standard --image "CentOS7" \
+--key-name temp-key-1 --security-groups open-all \
 --nic net-id=${MY_WORK_NET} \
 test-vm-1
 wait_instance test-vm-1
 
-nova boot --flavor my.standard --image "Fedora23-20151030" \
---key-name temp-key-1 --security-groups open_all \
+nova boot --flavor my.standard --image "CentOS7" \
+--key-name temp-key-1 --security-groups open-all \
 --nic net-id=${MY_2ND_NET} --nic net-id=${MY_3RD_NET} \
 test-vm-2
 wait_instance test-vm-2
 
 nova boot --flavor my.standard --boot-volume $VOLID \
---key-name temp-key-1 --security-groups open_all \
+--key-name temp-key-1 --security-groups open-all \
 --nic net-id=${MY_3RD_NET} \
 test-vm-3
 wait_instance test-vm-3
