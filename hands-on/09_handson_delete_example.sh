@@ -3,10 +3,10 @@ function grep_ip () { grep "[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+"; }
 
 nova delete test-vm-1 test-vm-2 test-vm-3
 
-FIPs=`nova floating-ip-list | grep_ip | awk '{print $2}'`
+FIPs=`neutron floatingip-list | grep_ip | awk '{print $2}'`
 for i in ${FIPs}
 do
-    nova floating-ip-delete ${i}
+    neutron floatingip-delete ${i}
 done
 
 neutron router-interface-delete Closed-Router 3rd-subnet

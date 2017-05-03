@@ -90,7 +90,7 @@ export MY_3RD_NET=`neutron net-show 3rd-net   -c id | get_uuid`
 sleep 3
 
 echo "## creating boot volume"
-IMAGEID=`glance image-show "CentOS7" | get_uuid`
+IMAGEID=`openstack image show "CentOS7" | get_uuid`
 cinder create --display-name boot-vol --image-id $IMAGEID 10
 
 wait_volume boot-vol
