@@ -496,7 +496,7 @@ outputs:
     value:
       name: { get_attr: [ instance_openstack, name ] }
       ip_address: { get_attr: [ neutron_port_os_eth0, fixed_ips, 0, ip_address ] }
-      floating_ip: floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
   password:
     description: server password for user "centos"
     value: { get_param: password }
