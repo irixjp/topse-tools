@@ -22,7 +22,55 @@ do
 done
 }
 
+echo "## creating image"
+wget http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2
+
+openstack image create \
+          --container-format bare --disk-format qcow2 \
+          --min-disk 10 --min-ram 1024 --public \
+          --file CentOS-7-x86_64-GenericCloud.qcow2 \
+CentOS7
+
+echo "## creating flavor"
+openstack flavor create --public --id 99 --vcpus 1 --ram 1024 \
+          --disk 10 --ephemeral 0 --swap 0 \
+          my.standard
+
+echo "## creating public network"
+neutron net-create --router:external public
+neutron subnet-create --name public-subnet \
+        --allocation-pool start=172.16.100.101,end=172.16.100.104 \
+        --disable-dhcp \
+        --gateway 172.16.100.254 \
+        public 172.16.100.0/24
+
+echo "## creating public networ"
+openstack keypair create temp-key-1 | tee /root/temp-key-1.pem
+chmod 600 /root/temp-key-1.pem
+
+echo "## creating security group"
+neutron security-group-create open_all --description "allow all communications"
+neutron security-group-rule-create --direction ingress --ethertype IPv4 \
+        --protocol icmp \
+        --remote-ip-prefix 0.0.0.0/0 open_all
+neutron security-group-rule-create --direction ingress --ethertype IPv4 \
+        --protocol tcp --port-range-min 1 --port-range-max 65535 \
+        --remote-ip-prefix 0.0.0.0/0 open_all
+neutron security-group-rule-create --direction ingress --ethertype IPv4 \
+        --protocol udp --port-range-min 1 --port-range-max 65535 \
+        --remote-ip-prefix 0.0.0.0/0 open_all
+
+echo "## creating routers"
+neutron router-create Ext-Router
 neutron router-create Closed-Router
+neutron router-gateway-set Ext-Router public
+
+echo "## creating 1st network"
+neutron net-create work-net
+neutron subnet-create --ip-version 4 --gateway 10.10.10.254 \
+        --name work-subnet --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4 \
+        work-net 10.10.10.0/24
+neutron router-interface-add Ext-Router work-subnet
 
 echo "## creating 2nd network"
 neutron net-create 2nd-net

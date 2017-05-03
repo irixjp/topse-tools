@@ -185,17 +185,31 @@ resources:
             bash-completion \
             ansible
 
-            wget reposerver/hands-on/openrc -O /home/centos/openrc
-            chown centos:centos /home/centos/openrc
+            sudo -u centos wget reposerver/hands-on/openrc -O /home/centos/openrc
 
-            cat << _EOF_ > /home/centos/ansible_hosts
+            sudo -u centos cat << _EOF_ > /home/centos/ansible_hosts
+            [localhost]
+            127.0.0.1 ansible_connection=local
+
             [openstack-single]
             192.168.199.100
             _EOF_
 
-            echo "_private_key_" > /home/centos/.ssh/id_rsa
-            chown centos:centos /home/centos/.ssh/id_rsa
+            sudo -u centos echo "_private_key_" > /home/centos/.ssh/id_rsa
             chmod 600 /home/centos/.ssh/id_rsa
+
+            sudo -u centos mkdir -p ./.config/openstack
+            sudo -u centos cat << _EOF_ > /home/centos/.config/openstack/clouds.yaml
+            clouds:
+              topse01:
+                auth:
+                  auth_url: http://192.168.199.10:5000
+                  project_name: admin
+                  username: admin
+                  password: password
+                identity_api_version: '2'
+                region_name: RegionOne
+            _EOF_
 
 
   config_openstack:
