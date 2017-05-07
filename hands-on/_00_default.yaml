@@ -1,0 +1,253 @@
+heat_template_version: 2015-04-30
+
+description: Setup default environment.
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will gives the specific ip address.
+
+  password:
+    type: string
+    label: Server password for user "centos"
+    description: Set your password to your instances.
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 300
+
+  wait_handle_after_reboot:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition_after_reboot:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle_after_reboot }
+      count: 1
+      timeout: 300
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: concole-key
+      save_private_key: true
+
+  secg:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: open-all
+      rules:
+        - protocol: icmp
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          port_range_min: 1
+          port_range_max: 65535
+          remote_ip_prefix: 0.0.0.0/0
+
+  private_network:
+    type: OS::Neutron::Net
+    properties:
+      name: work-net
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: work-subnet
+      ip_version: 4
+      network_id: { get_resource: private_network }
+      cidr: 192.168.199.0/24
+      gateway_ip: 192.168.199.254
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+
+  ext_router:
+    type: OS::Neutron::Router
+    properties:
+      name: Ext-Router
+      external_gateway_info:
+        network: public
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: ext_router }
+      subnet_id: { get_resource: private_subnet }
+
+  neutron_port_console:
+    type: OS::Neutron::Port
+    properties:
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.100
+      security_groups:
+        - { get_resource: secg }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron_port_console }
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_param: password }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_set_repo:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+          template: |
+            #!/bin/bash -ex
+            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel*
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+            yum clean all
+            yum repolist
+
+  config_send_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_send_notify_after_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            cat << EOF >> /etc/rc.d/rc.local
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+            EOF
+            chmod u+x /etc/rc.d/rc.local
+
+  config_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        reboot
+
+  config_consle:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            _private_key_: { get_attr: [ key_pair, private_key ] }
+          template: |
+            #!/bin/bash -ex
+            yum install -y \
+            python2-novaclient \
+            python2-cinderclient \
+            python2-keystoneclient \
+            python2-neutronclient \
+            python2-glanceclient \
+            python2-swiftclient \
+            python2-heatclient \
+            python-openstackclient \
+            jq \
+            wget \
+            vim \
+            crudini \
+            bash-completion \
+            ansible \
+            graphviz
+
+            sudo -u centos wget reposerver/hands-on/openrc -O /home/centos/openrc
+
+            sudo -u centos cat << _EOF_ > /home/centos/ansible_hosts
+            [localhost]
+            127.0.0.1 ansible_connection=local
+
+            [openstack-single]
+            192.168.199.100
+            _EOF_
+
+            sudo -u centos echo "_private_key_" > /home/centos/.ssh/id_rsa
+            chmod 600 /home/centos/.ssh/id_rsa
+
+            sudo -u centos mkdir -p ./.config/openstack
+            sudo -u centos cat << _EOF_ > /home/centos/.config/openstack/clouds.yaml
+            clouds:
+              topse01:
+                auth:
+                  auth_url: http://192.168.199.10:5000
+                  project_name: admin
+                  username: admin
+                  password: password
+                identity_api_version: '2'
+                region_name: RegionOne
+            _EOF_
+
+            yum install -y httpd
+            systemctl enable httpd
+            systemctl start httpd
+
+  server_init_console:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_set_repo }
+      - config: { get_resource: config_consle }
+      - config: { get_resource: config_send_notify }
+      - config: { get_resource: config_send_notify_after_reboot }
+      - config: { get_resource: config_reboot }
+
+  instance_console:
+    type: OS::Nova::Server
+    properties:
+      name: handson9-console
+      image: CentOS7
+      flavor: m1.small
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron_port_console }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_console }
+
+outputs:
+  instance:
+    description: server information
+    value:
+      name: { get_attr: [ instance_console, name ] }
+      ip_address: { get_attr: [ neutron_port_console, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+  password:
+    description: server password for user "centos"
+    value: { get_param: password }
+  private_key:
+    description: private key for user "centos"
+    value: { get_attr: [ key_pair, private_key ] }

@@ -1,0 +1,1245 @@
+heat_template_version: 2015-04-30
+
+description: 11th Hands-on Environment
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will gives the specific ip address.
+
+  password:
+    type: string
+    label: Server password
+    description: You set your password on your instances.
+
+resources:
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: handson11-key
+      save_private_key: true
+
+  floating_network:
+    type: OS::Neutron::Net
+    properties:
+      name: floating-net
+
+  floating_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: floating-subnet
+      ip_version: 4
+      network_id: { get_resource: floating_network }
+      cidr: 172.16.100.0/24
+      gateway_ip: 172.16.100.254
+      enable_dhcp: False
+
+#  compute_network:
+#    type: OS::Neutron::Net
+#    properties:
+#      name: compute-net
+# 
+#  compute_subnet:
+#    type: OS::Neutron::Subnet
+#    properties:
+#      name: compute-subnet
+#      ip_version: 4
+#      network_id: { get_resource: compute_network }
+#      cidr: 10.55.55.0/24
+#      gateway_ip: null
+#      enable_dhcp: True
+
+#  storage_network:
+#    type: OS::Neutron::Net
+#    properties:
+#      name: compute-net
+#
+#  storage_subnet:
+#    type: OS::Neutron::Subnet
+#    properties:
+#      name: storage-subnet
+#      ip_version: 4
+#      network_id: { get_resource: storage_network }
+#      cidr: 10.66.66.0/24
+#      gateway_ip: null
+#      enable_dhcp: True
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: Ext-Router
+      subnet: { get_resource: floating_subnet }
+
+  neutron_port_console:
+    type: OS::Neutron::Port
+    properties:
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.10
+      security_groups:
+        - open-all
+
+  neutron_port_cc_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.20
+      security_groups:
+        - open-all
+
+  neutron_port_cc_eth1:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: floating_network }
+      fixed_ips:
+        - ip_address: 172.16.100.200
+        - ip_address: 172.16.100.201
+        - ip_address: 172.16.100.202
+        - ip_address: 172.16.100.203
+        - ip_address: 172.16.100.204
+      security_groups:
+        - open-all
+
+#  neutron_port_cc_eth2:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: compute_network }
+#      fixed_ips:
+#        - ip_address: 10.55.55.110
+#      security_groups:
+#        - open-all
+# 
+#  neutron_port_cc_eth3:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: storage_network }
+#      fixed_ips:
+#        - ip_address: 10.66.66.110
+#      security_groups:
+#        - open-all
+
+  neutron_port_node1_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.21
+      security_groups:
+        - open-all
+
+#  neutron_port_node1_eth1:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: floating_network }
+#      fixed_ips:
+#        - ip_address: 172.16.100.121
+#      security_groups:
+#        - open-all
+#
+#  neutron_port_node1_eth2:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: compute_network }
+#      fixed_ips:
+#        - ip_address: 10.55.55.121
+#      security_groups:
+#        - open-all
+# 
+#  neutron_port_node1_eth3:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: storage_network }
+#      fixed_ips:
+#        - ip_address: 10.66.66.121
+#      security_groups:
+#        - open-all
+
+  neutron_port_node2_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.22
+      security_groups:
+        - open-all
+
+#$  neutron_port_node2_eth1:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: floating_network }
+#      fixed_ips:
+#        - ip_address: 172.16.100.122
+#      security_groups:
+#        - open-all
+#
+#  neutron_port_node2_eth2:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: compute_network }
+#      fixed_ips:
+#        - ip_address: 10.55.55.122
+#      security_groups:
+#        - open-all
+# 
+#  neutron_port_node2_eth3:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: { get_resource: storage_network }
+#      fixed_ips:
+#        - ip_address: 10.66.66.122
+#      security_groups:
+#        - open-all
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron_port_console }
+
+  config_reboot_all:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: |
+        #!/bin/bash -ex
+        cd /root
+        ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -vvv -i ansible_hosts -u root reboot.yaml
+
+  config_consle:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config:
+        str_replace:
+          params:
+            $_private_key_: { get_attr: [ key_pair, private_key ] }
+            $_public_key_: { get_attr: [ key_pair, public_key ] }
+          template: |
+            #!/bin/bash -ex
+            yum install -y \
+            python2-novaclient \
+            python2-cinderclient \
+            python2-keystoneclient \
+            python2-neutronclient \
+            python2-glanceclient \
+            python2-swiftclient \
+            python2-heatclient \
+            python-openstackclient \
+            jq \
+            wget \
+            vim \
+            crudini \
+            bash-completion \
+            ansible lynx plotnetcfg graphviz httpd
+
+            systemctl enable httpd
+            systemctl start httpd
+
+            wget reposerver/hands-on/openrc -O /home/centos/openrc
+            chown centos:centos /home/centos/openrc
+            echo "$_private_key_" > /home/centos/.ssh/id_rsa
+            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
+            chown centos:centos /home/centos/.ssh/id_rsa
+            chown centos:centos /home/centos/.ssh/id_rsa.pub
+            chmod 600 /home/centos/.ssh/id_rsa
+            chmod 644 /home/centos/.ssh/id_rsa.pub
+
+            echo "$_private_key_" > /root/.ssh/id_rsa
+            echo "$_public_key_" > /root/.ssh/id_rsa.pub
+            chmod 600 /root/.ssh/id_rsa
+            chmod 644 /root/.ssh/id_rsa.pub
+
+            cat << _EOF_ > /root/ansible_hosts
+            [localhost]
+            127.0.0.1 ansible_connection=local
+
+            [openstack-all]
+            192.168.199.20
+            192.168.199.21
+            192.168.199.22
+            _EOF_
+
+            cat << _EOF_ > /root/reboot.yaml
+            - name: reboot node and check settings
+              hosts: openstack-all
+              gather_facts: no
+              tasks:
+                - name: test connection (before reboot)
+                  ping:
+
+                - name: reboot!
+                  shell: sleep 2 && shutdown -r now "Ansible reboot this host"
+                  async: 1
+                  poll: 0
+                  ignore_errors: true
+
+                - name: wait for SSH port down
+                  local_action: wait_for host={{ inventory_hostname }} port=22 state=stopped
+
+                - name: wait for SSH port up
+                  local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=10 timeout=300
+
+                - name: test connection (after reboot)
+                  ping:
+            _EOF_
+
+
+  config_pre_openstack:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config:
+        str_replace:
+          params:
+            $_private_key_: { get_attr: [ key_pair, private_key ] }
+            $_public_key_: { get_attr: [ key_pair, public_key ] }
+          template: |
+            #!/bin/bash -ex
+            yum install -y wget crudini vim bash-completion lynx jq plotnetcfg graphviz
+            yum update -y
+
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel-*
+
+            echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
+            modprobe -r kvm_intel
+            modprobe kvm_intel
+            cat /sys/module/kvm_intel/parameters/nested
+
+            cat << EOF > /usr/lib/sysctl.d/00-system.conf
+            net.ipv4.ip_forward = 1
+            net.ipv4.conf.default.rp_filter = 0
+            net.ipv4.conf.all.rp_filter = 0
+            net.ipv4.conf.all.forwarding = 1
+            EOF
+
+            echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+            sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+            rm -f /root/.ssh/authorized_keys
+            cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+
+            echo "$_private_key_" > /root/.ssh/id_rsa
+            echo "$_public_key_"> /root/.ssh/id_rsa.pub
+            chown centos:centos /root/.ssh/id_rsa
+            chown centos:centos /root/.ssh/id_rsa.pub
+            chmod 600 /root/.ssh/id_rsa
+            chmod 644 /root/.ssh/id_rsa.pub
+
+            yum install -y openstack-packstack openstack-packstack-doc python-netaddr openstack-utils
+            setenforce 0
+
+  config_openstack_cc:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: |
+        #!/bin/bash -ex
+        export HOME=/root
+        packstack --dry-run --allinone --default-password='password' --provision-demo=n --gen-answer-file=/root/answer.txt
+        crudini --set /root/answer.txt general CONFIG_NAGIOS_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_SWIFT_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_HEAT_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_CEILOMETER_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
+        crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 30G
+        crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 3G
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
+        crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF eth0
+        crudini --set /root/answer.txt general CONFIG_CONTROLLER_HOST 192.168.199.20
+        crudini --set /root/answer.txt general CONFIG_NETWORK_HOSTS   192.168.199.20
+        crudini --set /root/answer.txt general CONFIG_COMPUTE_HOSTS   192.168.199.21,192.168.199.22
+
+        packstack --answer-file=/root/answer.txt
+
+        openstack-config --set /etc/cinder/cinder.conf lvm volume_clear none
+        openstack-config --set /etc/nova/nova.conf DEFAULT api_rate_limit false
+        openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
+        openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
+        openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_host 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_port 6080
+        openstack-config --set /etc/nova/nova.conf vnc enabled true
+        openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://192.168.199.20:6080/vnc_auto.html
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address 192.168.199.20
+        openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
+        echo "dhcp-option-force=26,1400" > /etc/neutron/dnsmasq-neutron.conf
+
+        cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth1
+        DEVICE="eth1"
+        BOOTPROT="none"
+        ONBOOT="yes"
+        TYPE="OVSPort"
+        DEVICETYPE="ovs"
+        OVS_BRIDGE="br-ex"
+        EOF
+
+        cat << EOF > /etc/sysconfig/network-scripts/ifcfg-br-ex
+        DEVICE="br-ex"
+        BOOTPROT="none"
+        ONBOOT="yes"
+        TYPE="OVSBridge"
+        DEVICETYPE="ovs"
+        OVSBOOTPROTO="none"
+        OVSDHCPINTERFACES="eth1"
+        EOF
+
+  config_openstack_node1:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: |
+        #!/bin/bash -ex
+        openstack-config --set /etc/nova/nova.conf vnc enabled true
+        openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://192.168.199.20:6080/vnc_auto.html
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address 192.168.199.21
+        openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
+        openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
+        openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
+        openstack-config --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
+
+  config_openstack_node2:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config: |
+        #!/bin/bash -ex
+        openstack-config --set /etc/nova/nova.conf vnc enabled true
+        openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://192.168.199.20:6080/vnc_auto.html
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address 192.168.199.22
+        openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
+        openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
+        openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
+        openstack-config --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
+
+  dp_initialize_console:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_consle }
+      server: { get_resource: instance_console }
+
+  dp_initialize_cc:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_pre_openstack }
+      server: { get_resource: instance_openstack_cc }
+
+  dp_initialize_node1:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_pre_openstack }
+      server: { get_resource: instance_openstack_node1 }
+
+  dp_initialize_node2:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_pre_openstack }
+      server: { get_resource: instance_openstack_node2 }
+
+  dp_reboot_all_before:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: [ dp_initialize_cc, dp_initialize_node1, dp_initialize_node2 ]
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_reboot_all }
+      server: { get_resource: instance_console }
+
+  dp_install_openstack:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: dp_reboot_all_before
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_openstack_cc }
+      server: { get_resource: instance_openstack_cc }
+
+  dp_node1_config:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: dp_install_openstack
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_openstack_node1 }
+      server: { get_resource: instance_openstack_cc }
+
+  dp_node2_config:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: dp_install_openstack
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_openstack_node2 }
+      server: { get_resource: instance_openstack_cc }
+
+  dp_reboot_all_after:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: [ dp_node1_config, dp_node2_config ]
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config: { get_resource: config_reboot_all }
+      server: { get_resource: instance_console }
+
+  instance_console:
+    type: OS::Nova::Server
+    properties:
+      name: handson11-console
+      image: CentOS7
+      flavor: m1.small
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron_port_console }
+      software_config_transport: POLL_TEMP_URL
+      user_data_format: SOFTWARE_CONFIG
+      user_data: { get_resource: boot_config }
+
+  instance_openstack_cc:
+    type: OS::Nova::Server
+    properties:
+      name: handson11-openstack-cc
+      image: CentOS7
+      flavor: m1.large
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron_port_cc_eth0 }
+        - port: { get_resource: neutron_port_cc_eth1 }
+#        - port: { get_resource: neutron_port_cc_eth2 }
+#        - port: { get_resource: neutron_port_cc_eth3 }
+      software_config_transport: POLL_TEMP_URL
+      user_data_format: SOFTWARE_CONFIG
+      user_data: { get_resource: boot_config }
+
+  instance_openstack_node1:
+    type: OS::Nova::Server
+    properties:
+      name: handson11-openstack-node1
+      image: CentOS7
+      flavor: m1.large
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron_port_node1_eth0 }
+#        - port: { get_resource: neutron_port_node1_eth1 }
+#        - port: { get_resource: neutron_port_node1_eth2 }
+#        - port: { get_resource: neutron_port_node1_eth3 }
+      software_config_transport: POLL_TEMP_URL
+      user_data_format: SOFTWARE_CONFIG
+      user_data: { get_resource: boot_config }
+
+  instance_openstack_node2:
+    type: OS::Nova::Server
+    properties:
+      name: handson11-openstack-node2
+      image: CentOS7
+      flavor: m1.large
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron_port_node2_eth0 }
+#        - port: { get_resource: neutron_port_node2_eth1 }
+#        - port: { get_resource: neutron_port_node2_eth2 }
+#        - port: { get_resource: neutron_port_node2_eth3 }
+      software_config_transport: POLL_TEMP_URL
+      user_data_format: SOFTWARE_CONFIG
+      user_data: { get_resource: boot_config }
+
+  boot_config:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_install_agent }
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_param: password }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+  config_install_agent:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+          template: |
+            #!/bin/bash
+            set -eux
+
+            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel*
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+            yum clean all
+            yum repolist
+
+            yum -y install python-zaqarclient os-collect-config os-apply-config os-refresh-config dib-utils
+
+            # os-apply-config templates directory
+            oac_templates=/usr/libexec/os-apply-config/templates
+            mkdir -p $oac_templates/etc
+
+            # initial /etc/os-collect-config.conf
+            cat <<EOF >/etc/os-collect-config.conf
+            [DEFAULT]
+            command = os-refresh-config
+            EOF
+
+            # template for building os-collect-config.conf for polling heat
+            cat <<EOF >$oac_templates/etc/os-collect-config.conf
+            [DEFAULT]
+            {{^os-collect-config.command}}
+            command = os-refresh-config
+            {{/os-collect-config.command}}
+            {{#os-collect-config}}
+            {{#command}}
+            command = {{command}}
+            {{/command}}
+            {{#polling_interval}}
+            polling_interval = {{polling_interval}}
+            {{/polling_interval}}
+            {{#cachedir}}
+            cachedir = {{cachedir}}
+            {{/cachedir}}
+            {{#collectors}}
+            collectors = {{.}}
+            {{/collectors}}
+            {{#splay}}
+            splay = {{.}}
+            {{/splay}}
+
+            {{#cfn}}
+            [cfn]
+            {{#metadata_url}}
+            metadata_url = {{metadata_url}}
+            {{/metadata_url}}
+            stack_name = {{stack_name}}
+            secret_access_key = {{secret_access_key}}
+            access_key_id = {{access_key_id}}
+            path = {{path}}
+            {{#ca_certificate}}
+            ca_certificate = {{.}}
+            {{/ca_certificate}}
+            {{/cfn}}
+
+            {{#heat}}
+            [heat]
+            auth_url = {{auth_url}}
+            user_id = {{user_id}}
+            password = {{password}}
+            project_id = {{project_id}}
+            stack_id = {{stack_id}}
+            resource_name = {{resource_name}}
+            {{/heat}}
+
+            {{#zaqar}}
+            [zaqar]
+            auth_url = {{auth_url}}
+            user_id = {{user_id}}
+            password = {{password}}
+            project_id = {{project_id}}
+            queue_id = {{queue_id}}
+            {{#use_websockets}}
+            use_websockets = {{.}}
+            {{/use_websockets}}
+            {{/zaqar}}
+
+            {{#request}}
+            [request]
+            metadata_url = {{metadata_url}}
+            {{/request}}
+
+            {{/os-collect-config}}
+
+            EOF
+            mkdir -p $oac_templates/var/run/heat-config
+
+            # template for writing heat deployments data to a file
+            echo "{{deployments}}" > $oac_templates/var/run/heat-config/heat-config
+
+            # os-refresh-config scripts directory
+            # This moves to /usr/libexec/os-refresh-config in later releases
+            orc_scripts=/opt/stack/os-config-refresh
+            for d in pre-configure.d configure.d migration.d post-configure.d; do
+                install -m 0755 -o root -g root -d $orc_scripts/$d
+            done
+
+            # os-refresh-config script for running os-apply-config
+            cat <<EOF >$orc_scripts/configure.d/20-os-apply-config
+            #!/bin/bash
+            set -ue
+
+            exec os-apply-config
+
+            EOF
+            chmod 700 $orc_scripts/configure.d/20-os-apply-config
+
+            # os-refresh-config script for running heat config hooks
+            cat <<EOF >$orc_scripts/configure.d/55-heat-config
+            #!/usr/bin/env python
+            #
+            #    Licensed under the Apache License, Version 2.0 (the "License"); you may
+            #    not use this file except in compliance with the License. You may obtain
+            #    a copy of the License at
+            #
+            #         http://www.apache.org/licenses/LICENSE-2.0
+            #
+            #    Unless required by applicable law or agreed to in writing, software
+            #    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+            #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+            #    License for the specific language governing permissions and limitations
+            #    under the License.
+
+            import json
+            import logging
+            import os
+            import shutil
+            import stat
+            import subprocess
+            import sys
+
+            import requests
+
+            HOOKS_DIR_PATHS = (
+                os.environ.get('HEAT_CONFIG_HOOKS'),
+                '/usr/libexec/heat-config/hooks',
+                '/var/lib/heat-config/hooks',
+            )
+            CONF_FILE = os.environ.get('HEAT_SHELL_CONFIG',
+                                       '/var/run/heat-config/heat-config')
+            DEPLOYED_DIR = os.environ.get('HEAT_CONFIG_DEPLOYED',
+                                          '/var/lib/heat-config/deployed')
+            OLD_DEPLOYED_DIR = os.environ.get('HEAT_CONFIG_DEPLOYED_OLD',
+                                              '/var/run/heat-config/deployed')
+            HEAT_CONFIG_NOTIFY = os.environ.get('HEAT_CONFIG_NOTIFY',
+                                                'heat-config-notify')
+
+            def main(argv=sys.argv):
+                log = logging.getLogger('heat-config')
+                handler = logging.StreamHandler(sys.stderr)
+                handler.setFormatter(
+                    logging.Formatter(
+                        '[%(asctime)s] (%(name)s) [%(levelname)s] %(message)s'))
+                log.addHandler(handler)
+                log.setLevel('DEBUG')
+
+                if not os.path.exists(CONF_FILE):
+                    log.error('No config file %s' % CONF_FILE)
+                    return 1
+
+                conf_mode = stat.S_IMODE(os.lstat(CONF_FILE).st_mode)
+                if conf_mode != 0o600:
+                    os.chmod(CONF_FILE, 0o600)
+
+                if not os.path.isdir(DEPLOYED_DIR):
+                    if DEPLOYED_DIR != OLD_DEPLOYED_DIR and os.path.isdir(OLD_DEPLOYED_DIR):
+                        log.debug('Migrating deployed state from %s to %s' %
+                                  (OLD_DEPLOYED_DIR, DEPLOYED_DIR))
+                        shutil.move(OLD_DEPLOYED_DIR, DEPLOYED_DIR)
+                    else:
+                        os.makedirs(DEPLOYED_DIR, 0o700)
+
+                try:
+                    configs = json.load(open(CONF_FILE))
+                except ValueError:
+                    pass
+                else:
+                    for c in configs:
+                        try:
+                            invoke_hook(c, log)
+                        except Exception as e:
+                            log.exception(e)
+
+            def find_hook_path(group):
+                # sanitise the group to get an alphanumeric hook file name
+                hook = "".join(
+                    x for x in group if x == '-' or x == '_' or x.isalnum())
+
+                for h in HOOKS_DIR_PATHS:
+                    if not h or not os.path.exists(h):
+                        continue
+                    hook_path = os.path.join(h, hook)
+                    if os.path.exists(hook_path):
+                        return hook_path
+
+            def invoke_hook(c, log):
+                # Sanitize input values (bug 1333992). Convert all String
+                # inputs to strings if they're not already
+                hot_inputs = c.get('inputs', [])
+                for hot_input in hot_inputs:
+                    if hot_input.get('type', None) == 'String' and \
+                            not isinstance(hot_input['value'], basestring):
+                        hot_input['value'] = str(hot_input['value'])
+                iv = dict((i['name'], i['value']) for i in c['inputs'])
+                # The group property indicates whether it is softwarecomponent or
+                # plain softwareconfig
+                # If it is softwarecomponent, pick up a property config to invoke
+                # according to deploy_action
+                group = c.get('group')
+                if group == 'component':
+                    found = False
+                    action = iv.get('deploy_action')
+                    config = c.get('config')
+                    configs = config.get('configs')
+                    if configs:
+                        for cfg in configs:
+                            if action in cfg['actions']:
+                                c['config'] = cfg['config']
+                                c['group'] = cfg['tool']
+                                found = True
+                                break
+                    if not found:
+                        log.warn('Skipping group %s, no valid script is defined'
+                                 ' for deploy action %s' % (group, action))
+                        return
+
+                # check to see if this config is already deployed
+                deployed_path = os.path.join(DEPLOYED_DIR, '%s.json' % c['id'])
+
+                if os.path.exists(deployed_path):
+                    log.warn('Skipping config %s, already deployed' % c['id'])
+                    log.warn('To force-deploy, rm %s' % deployed_path)
+                    return
+
+                signal_data = {}
+                hook_path = find_hook_path(c['group'])
+
+                if not hook_path:
+                    log.warn('Skipping group %s with no hook script %s' % (
+                        c['group'], hook_path))
+                    return
+
+                # write out config, which indicates it is deployed regardless of
+                # subsequent hook success
+                with os.fdopen(os.open(
+                        deployed_path, os.O_CREAT | os.O_WRONLY, 0o600), 'w') as f:
+                    json.dump(c, f, indent=2)
+
+                log.debug('Running %s < %s' % (hook_path, deployed_path))
+                subproc = subprocess.Popen([hook_path],
+                                           stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                stdout, stderr = subproc.communicate(input=json.dumps(c))
+
+                log.info(stdout)
+                log.debug(stderr)
+
+                if subproc.returncode:
+                    log.error("Error running %s. [%s]\n" % (
+                        hook_path, subproc.returncode))
+                else:
+                    log.info('Completed %s' % hook_path)
+
+                try:
+                    if stdout:
+                        signal_data = json.loads(stdout)
+                except ValueError:
+                    signal_data = {
+                        'deploy_stdout': stdout,
+                        'deploy_stderr': stderr,
+                        'deploy_status_code': subproc.returncode,
+                    }
+
+                signal_data_path = os.path.join(DEPLOYED_DIR, '%s.notify.json' % c['id'])
+                # write out notify data for debugging
+                with os.fdopen(os.open(
+                        signal_data_path, os.O_CREAT | os.O_WRONLY, 0o600), 'w') as f:
+                    json.dump(signal_data, f, indent=2)
+
+                log.debug('Running %s %s < %s' % (
+                    HEAT_CONFIG_NOTIFY, deployed_path, signal_data_path))
+                subproc = subprocess.Popen([HEAT_CONFIG_NOTIFY, deployed_path],
+                                           stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
+                stdout, stderr = subproc.communicate(input=json.dumps(signal_data))
+
+                log.info(stdout)
+
+                if subproc.returncode:
+                    log.error(
+                        "Error running heat-config-notify. [%s]\n" % subproc.returncode)
+                    log.error(stderr)
+                else:
+                    log.debug(stderr)
+
+
+            if __name__ == '__main__':
+                sys.exit(main(sys.argv))
+
+            EOF
+            chmod 700 $orc_scripts/configure.d/55-heat-config
+
+            # config hook for shell scripts
+            hooks_dir=/var/lib/heat-config/hooks
+            mkdir -p $hooks_dir
+
+            # install hook for configuring with shell scripts
+            cat <<EOF >$hooks_dir/script
+            #!/usr/bin/env python
+            #
+            #    Licensed under the Apache License, Version 2.0 (the "License"); you may
+            #    not use this file except in compliance with the License. You may obtain
+            #    a copy of the License at
+            #
+            #         http://www.apache.org/licenses/LICENSE-2.0
+            #
+            #    Unless required by applicable law or agreed to in writing, software
+            #    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+            #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+            #    License for the specific language governing permissions and limitations
+            #    under the License.
+
+            import json
+            import logging
+            import os
+            import subprocess
+            import sys
+
+            WORKING_DIR = os.environ.get('HEAT_SCRIPT_WORKING',
+                                         '/var/lib/heat-config/heat-config-script')
+            OUTPUTS_DIR = os.environ.get('HEAT_SCRIPT_OUTPUTS',
+                                         '/var/run/heat-config/heat-config-script')
+
+            def prepare_dir(path):
+                if not os.path.isdir(path):
+                    os.makedirs(path, 0o700)
+
+            def main(argv=sys.argv):
+                log = logging.getLogger('heat-config')
+                handler = logging.StreamHandler(sys.stderr)
+                handler.setFormatter(
+                    logging.Formatter(
+                        '[%(asctime)s] (%(name)s) [%(levelname)s] %(message)s'))
+                log.addHandler(handler)
+                log.setLevel('DEBUG')
+
+                prepare_dir(OUTPUTS_DIR)
+                prepare_dir(WORKING_DIR)
+                os.chdir(WORKING_DIR)
+
+                c = json.load(sys.stdin)
+
+                env = os.environ.copy()
+                for input in c['inputs']:
+                    input_name = input['name']
+                    value = input.get('value', '')
+                    if isinstance(value, dict) or isinstance(value, list):
+                        env[input_name] = json.dumps(value)
+                    else:
+                        env[input_name] = value
+                    log.info('%s=%s' % (input_name, env[input_name]))
+
+                fn = os.path.join(WORKING_DIR, c['id'])
+                heat_outputs_path = os.path.join(OUTPUTS_DIR, c['id'])
+                env['heat_outputs_path'] = heat_outputs_path
+
+                with os.fdopen(os.open(fn, os.O_CREAT | os.O_WRONLY, 0o700), 'w') as f:
+                    f.write(c.get('config', '').encode('utf-8'))
+
+                log.debug('Running %s' % fn)
+                subproc = subprocess.Popen([fn], stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE, env=env)
+                stdout, stderr = subproc.communicate()
+
+                log.info(stdout)
+                log.debug(stderr)
+
+                if subproc.returncode:
+                    log.error("Error running %s. [%s]\n" % (fn, subproc.returncode))
+                else:
+                    log.info('Completed %s' % fn)
+
+                response = {}
+
+                for output in c.get('outputs') or []:
+                    output_name = output['name']
+                    try:
+                        with open('%s.%s' % (heat_outputs_path, output_name)) as out:
+                            response[output_name] = out.read()
+                    except IOError:
+                        pass
+
+                response.update({
+                    'deploy_stdout': stdout,
+                    'deploy_stderr': stderr,
+                    'deploy_status_code': subproc.returncode,
+                })
+
+                json.dump(response, sys.stdout)
+
+            if __name__ == '__main__':
+                sys.exit(main(sys.argv))
+
+            EOF
+            chmod 755 $hooks_dir/script
+
+            # install heat-config-notify command
+            cat <<EOF >/usr/bin/heat-config-notify
+            #!/usr/bin/env python
+            #
+            #    Licensed under the Apache License, Version 2.0 (the "License"); you may
+            #    not use this file except in compliance with the License. You may obtain
+            #    a copy of the License at
+            #
+            #         http://www.apache.org/licenses/LICENSE-2.0
+            #
+            #    Unless required by applicable law or agreed to in writing, software
+            #    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+            #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+            #    License for the specific language governing permissions and limitations
+            #    under the License.
+
+            import json
+            import logging
+            import os
+            import sys
+
+            import requests
+
+            try:
+                from heatclient import client as heatclient
+            except ImportError:
+                heatclient = None
+
+            try:
+                from keystoneclient.v3 import client as ksclient
+            except ImportError:
+                ksclient = None
+
+            try:
+                from zaqarclient.queues.v1 import client as zaqarclient
+            except ImportError:
+                zaqarclient = None
+
+            MAX_RESPONSE_SIZE = 950000
+
+            def init_logging():
+                log = logging.getLogger('heat-config-notify')
+                handler = logging.StreamHandler(sys.stderr)
+                handler.setFormatter(
+                    logging.Formatter(
+                        '[%(asctime)s] (%(name)s) [%(levelname)s] %(message)s'))
+                log.addHandler(handler)
+                log.setLevel('DEBUG')
+                return log
+
+            def trim_response(response, trimmed_values=None):
+                """Trim selected values from response.
+
+                Makes given response smaller or the same size as MAX_RESPONSE_SIZE by
+                trimming given trimmed_values from response dict from the left side
+                (beginning). Returns trimmed and serialized JSON response itself.
+                """
+
+                trimmed_values = trimmed_values or ('deploy_stdout', 'deploy_stderr')
+                str_response = json.dumps(response, ensure_ascii=True, encoding='utf-8')
+                len_total = len(str_response)
+                offset = MAX_RESPONSE_SIZE - len_total
+                if offset >= 0:
+                    return str_response
+                offset = abs(offset)
+                for key in trimmed_values:
+                    len_value = len(response[key])
+                    cut = int(round(float(len_value) / len_total * offset))
+                    response[key] = response[key][cut:]
+                str_response = json.dumps(response, ensure_ascii=True, encoding='utf-8')
+                return str_response
+
+            def main(argv=sys.argv, stdin=sys.stdin):
+
+                log = init_logging()
+                usage = ('Usage:\n  heat-config-notify /path/to/config.json '
+                         '< /path/to/signal_data.json')
+
+                if len(argv) < 2:
+                    log.error(usage)
+                    return 1
+
+                try:
+                    signal_data = json.load(stdin)
+                except ValueError:
+                    log.warn('No valid json found on stdin')
+                    signal_data = {}
+
+                conf_file = argv[1]
+                if not os.path.exists(conf_file):
+                    log.error('No config file %s' % conf_file)
+                    log.error(usage)
+                    return 1
+
+                c = json.load(open(conf_file))
+
+                iv = dict((i['name'], i['value']) for i in c['inputs'])
+
+                if 'deploy_signal_id' in iv:
+                    sigurl = iv.get('deploy_signal_id')
+                    sigverb = iv.get('deploy_signal_verb', 'POST')
+                    log.debug('Signaling to %s via %s' % (sigurl, sigverb))
+                    # we need to trim log content because Heat response size is limited
+                    # by max_json_body_size = 1048576
+                    str_signal_data = trim_response(signal_data)
+                    if sigverb == 'PUT':
+                        r = requests.put(sigurl, data=str_signal_data,
+                                         headers={'content-type': 'application/json'})
+                    else:
+                        r = requests.post(sigurl, data=str_signal_data,
+                                          headers={'content-type': 'application/json'})
+                    log.debug('Response %s ' % r)
+
+                if 'deploy_queue_id' in iv:
+                    queue_id = iv.get('deploy_queue_id')
+                    log.debug('Signaling to queue %s' % (queue_id,))
+
+                    ks = ksclient.Client(
+                        auth_url=iv['deploy_auth_url'],
+                        user_id=iv['deploy_user_id'],
+                        password=iv['deploy_password'],
+                        project_id=iv['deploy_project_id'])
+                    endpoint = ks.service_catalog.url_for(
+                        service_type='messaging', endpoint_type='publicURL')
+
+                    conf = {
+                        'auth_opts': {
+                            'backend': 'keystone',
+                            'options': {
+                                'os_auth_token': ks.auth_token,
+                                'os_project_id': iv['deploy_project_id'],
+                            }
+                        }
+                    }
+                    cli = zaqarclient.Client(endpoint, conf=conf, version=1.1)
+                    queue = cli.queue(queue_id)
+                    r = queue.post({'body': signal_data, 'ttl': 600})
+                    log.debug('Response %s ' % r)
+
+                elif 'deploy_auth_url' in iv:
+                    ks = ksclient.Client(
+                        auth_url=iv['deploy_auth_url'],
+                        user_id=iv['deploy_user_id'],
+                        password=iv['deploy_password'],
+                        project_id=iv['deploy_project_id'])
+                    endpoint = ks.service_catalog.url_for(
+                        service_type='orchestration', endpoint_type='publicURL')
+                    log.debug('Signalling to %s' % endpoint)
+                    heat = heatclient.Client(
+                        '1', endpoint, token=ks.auth_token)
+                    r = heat.resources.signal(
+                        iv.get('deploy_stack_id'),
+                        iv.get('deploy_resource_name'),
+                        data=signal_data)
+                    log.debug('Response %s ' % r)
+
+                return 0
+
+            if __name__ == '__main__':
+                sys.exit(main(sys.argv, sys.stdin))
+
+            EOF
+            chmod 755 /usr/bin/heat-config-notify
+
+            # run once to write out /etc/os-collect-config.conf
+            os-collect-config --one-time --debug
+            cat /etc/os-collect-config.conf
+
+            # run again to poll for deployments and run hooks
+            os-collect-config --one-time --debug
+
+            if [[ `systemctl` =~ -\.mount ]]; then
+
+                # if there is no system unit file, install a local unit
+                if [ ! -f /usr/lib/systemd/system/os-collect-config.service ]; then
+
+                    cat <<EOF >/etc/systemd/system/os-collect-config.service
+            [Unit]
+            Description=Collect metadata and run hook commands.
+
+            [Service]
+            ExecStart=/usr/bin/os-collect-config
+            Restart=on-failure
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            cat <<EOF >/etc/os-collect-config.conf
+            [DEFAULT]
+            command=os-refresh-config
+            EOF
+                fi
+
+                # enable and start service to poll for deployment changes
+                systemctl enable os-collect-config
+                systemctl start --no-block os-collect-config
+            elif [[ `/sbin/init --version` =~ upstart ]]; then
+                if [ ! -f /etc/init/os-collect-config.conf ]; then
+
+                    cat <<EOF >/etc/init/os-collect-config.conf
+            start on runlevel [2345]
+            stop on runlevel [016]
+            respawn
+
+            # We're logging to syslog
+            console none
+
+            exec os-collect-config  2>&1 | logger -t os-collect-config
+            EOF
+                fi
+                initctl reload-configuration
+                service os-collect-config start
+            else
+                echo "ERROR: only systemd or upstart supported" 1>&2
+                exit 1
+            fi
+
+outputs:
+  instance1:
+    description: server information
+    value:
+      name: { get_attr: [ instance_console, name ] }
+      ip_address: { get_attr: [ neutron_port_console, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+
+  instance2:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack_cc, name ] }
+      ip_address: { get_attr: [ neutron_port_cc_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: ""
+
+  instance3:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack_node1, name ] }
+      ip_address: { get_attr: [ neutron_port_node1_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: ""
+
+  instance4:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack_node2, name ] }
+      ip_address: { get_attr: [ neutron_port_node2_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: ""
+
+  password:
+    description: server password for user "centos"
+    value: { get_param: password }
+
+  private_key:
+    description: private key for user "centos"
+    value: { get_attr: [ key_pair, private_key ] }

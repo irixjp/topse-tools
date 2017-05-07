@@ -45,7 +45,7 @@ resources:
   secg:
     type: OS::Neutron::SecurityGroup
     properties:
-      name: { get_param: sec_group }
+      name: open-all
       rules:
         - protocol: icmp
           remote_ip_prefix: 0.0.0.0/0
@@ -57,16 +57,16 @@ resources:
   private_network:
     type: OS::Neutron::Net
     properties:
-      name: { get_param: private_network_name }
+      name: work-net
 
   private_subnet:
     type: OS::Neutron::Subnet
     properties:
-      name: { get_param: private_subnet_name }
+      name: work-subnet
       ip_version: 4
       network_id: { get_resource: private_network }
-      cidr: { get_param: private_subnet_cidr }
-      gateway_ip: { get_param: private_subnet_gw }
+      cidr: 192.168.199.0/24
+      gateway_ip: 192.168.199.254
       dns_nameservers:
         - 8.8.8.8
         - 8.8.4.4
@@ -74,9 +74,9 @@ resources:
   ext_router:
     type: OS::Neutron::Router
     properties:
-      name: { get_param: ext_router_name }
+      name: Ext-Router
       external_gateway_info:
-        network: { get_param: public_network }
+        network: public
 
   router_interface:
     type: OS::Neutron::RouterInterface
