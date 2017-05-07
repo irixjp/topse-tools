@@ -237,7 +237,11 @@ resources:
             vim \
             crudini \
             bash-completion \
-            ansible lynx plotnetcfg graphviz httpd
+            ansible \
+            lynx \
+            plotnetcfg \
+            graphviz \
+            httpd
 
             systemctl enable httpd
             systemctl start httpd
