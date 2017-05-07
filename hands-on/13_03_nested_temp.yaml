@@ -35,7 +35,7 @@ parameters:
 
 resources:
   server1:
-    type: 15_02_simple_server.yaml
+    type: 13_02_simple_server.yaml
     properties:
       image: { get_param: image }
       flavor: { get_param: flavor }
@@ -44,7 +44,7 @@ resources:
       private_network:  { get_param: private_network }
 
   server2:
-    type: 15_02_simple_server.yaml
+    type: 13_02_simple_server.yaml
     properties:
       image: { get_param: image }
       flavor: { get_param: flavor }
