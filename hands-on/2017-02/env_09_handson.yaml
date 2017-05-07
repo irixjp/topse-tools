@@ -1,0 +1,362 @@
+heat_template_version: 2015-04-30
+
+description: 9th Hands-on Environment
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will gives the specific ip address.
+
+  password:
+    type: string
+    label: Server password
+    description: You set your password on your instances.
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 1800
+
+  wait_handle_after_reboot:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition_after_reboot:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle_after_reboot }
+      count: 1
+      timeout: 1800
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: handson9-key
+      save_private_key: true
+
+  floating_network:
+    type: OS::Neutron::Net
+    properties:
+      name: floating-net
+
+  floating_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: floating-subnet
+      ip_version: 4
+      network_id: { get_resource: floating_network }
+      cidr: 172.16.100.0/24
+      gateway_ip: 172.16.100.254
+      enable_dhcp: False
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: Ext-Router
+      subnet: { get_resource: floating_subnet }
+
+#  neutron_port_console:
+#    type: OS::Neutron::Port
+#    properties:
+#      network: work-net
+#      fixed_ips:
+#        - ip_address: 192.168.199.250
+#      security_groups:
+#        - open-all
+
+  neutron_port_os_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.100
+      security_groups:
+        - open-all
+
+  neutron_port_os_eth1:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: floating_network }
+      fixed_ips:
+        - ip_address: 172.16.100.100
+        - ip_address: 172.16.100.101
+        - ip_address: 172.16.100.102
+        - ip_address: 172.16.100.103
+        - ip_address: 172.16.100.104
+      security_groups:
+        - open-all
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron_port_os_eth0 }
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_param: password }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_set_repo:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+          template: |
+            #!/bin/bash -ex
+            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel*
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+            yum clean all
+            yum repolist
+
+  config_send_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_send_notify_after_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            cat << EOF >> /etc/rc.d/rc.local
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+            EOF
+            chmod u+x /etc/rc.d/rc.local
+
+  config_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        reboot
+
+#  config_consle:
+#    type: OS::Heat::SoftwareConfig
+#    properties:
+#      config:
+#        str_replace:
+#          params:
+#            _private_key_: { get_attr: [ key_pair, private_key ] }
+#          template: |
+#            #!/bin/bash -ex
+#            yum install -y \
+#            python2-novaclient \
+#            python2-cinderclient \
+#            python2-keystoneclient \
+#            python2-neutronclient \
+#            python2-glanceclient \
+#            python2-swiftclient \
+#            python2-heatclient \
+#            python-openstackclient \
+#            jq \
+#            wget \
+#            vim \
+#            crudini \
+#            bash-completion \
+#            ansible
+# 
+#            sudo -u centos wget reposerver/hands-on/openrc -O /home/centos/openrc
+# 
+#            sudo -u centos cat << _EOF_ > /home/centos/ansible_hosts
+#            [localhost]
+#            127.0.0.1 ansible_connection=local
+# 
+#            [openstack-single]
+#            192.168.199.100
+#            _EOF_
+# 
+#            sudo -u centos echo "_private_key_" > /home/centos/.ssh/id_rsa
+#            chmod 600 /home/centos/.ssh/id_rsa
+# 
+#            sudo -u centos mkdir -p ./.config/openstack
+#            sudo -u centos cat << _EOF_ > /home/centos/.config/openstack/clouds.yaml
+#            clouds:
+#              topse01:
+#                auth:
+#                  auth_url: http://192.168.199.10:5000
+#                  project_name: admin
+#                  username: admin
+#                  password: password
+#                identity_api_version: '2'
+#                region_name: RegionOne
+#            _EOF_
+
+
+  config_openstack:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        yum install -y wget crudini vim bash-completion lynx jq plotnetcfg graphviz
+        yum update -y
+
+        rm -f /etc/yum.repos.d/CentOS*
+        rm -f /etc/yum.repos.d/epel-*
+
+        echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
+        modprobe -r kvm_intel
+        modprobe kvm_intel
+        cat /sys/module/kvm_intel/parameters/nested
+
+        cat << EOF > /usr/lib/sysctl.d/00-system.conf
+        net.ipv4.ip_forward = 1
+        net.ipv4.conf.default.rp_filter = 0
+        net.ipv4.conf.all.rp_filter = 0
+        net.ipv4.conf.all.forwarding = 1
+        EOF
+
+        echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+        sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
+        rm -f /root/.ssh/authorized_keys
+        cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
+        chmod 600 /root/.ssh/authorized_keys
+
+        yum install -y openstack-packstack openstack-packstack-doc python-netaddr
+        export HOME=/root
+        packstack --dry-run --allinone --default-password='password' --provision-demo=n --gen-answer-file=/root/answer.txt
+        crudini --set /root/answer.txt general CONFIG_NAGIOS_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_SWIFT_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_HEAT_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_CEILOMETER_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
+        crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 30G
+        crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 3G
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
+        crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF eth0
+        setenforce 0
+        packstack --answer-file=/root/answer.txt
+
+        openstack-config --set /etc/cinder/cinder.conf lvm volume_clear none
+        openstack-config --set /etc/nova/nova.conf DEFAULT api_rate_limit false
+        openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
+        openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
+        openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_host 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_port 6080
+        openstack-config --set /etc/nova/nova.conf vnc enabled true
+        openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://192.168.199.100:6080/vnc_auto.html
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address 192.168.199.100
+        openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
+        echo "dhcp-option-force=26,1400" > /etc/neutron/dnsmasq-neutron.conf
+
+        cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth1
+        DEVICE="eth1"
+        BOOTPROT="none"
+        ONBOOT="yes"
+        TYPE="OVSPort"
+        DEVICETYPE="ovs"
+        OVS_BRIDGE="br-ex"
+        EOF
+
+        cat << EOF > /etc/sysconfig/network-scripts/ifcfg-br-ex
+        DEVICE="br-ex"
+        BOOTPROT="none"
+        ONBOOT="yes"
+        TYPE="OVSBridge"
+        DEVICETYPE="ovs"
+        OVSBOOTPROTO="none"
+        OVSDHCPINTERFACES="eth1"
+        EOF
+
+
+#  server_init_console:
+#    type: OS::Heat::MultipartMime
+#    properties:
+#      parts:
+#      - config: { get_resource: config_set_passwd }
+#      - config: { get_resource: config_set_repo }
+#      - config: { get_resource: config_consle }
+#      - config: { get_resource: config_send_notify }
+#      - config: { get_resource: config_send_notify_after_reboot }
+#      - config: { get_resource: config_reboot }
+
+  server_init_openstack:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_set_repo }
+      - config: { get_resource: config_openstack }
+      - config: { get_resource: config_send_notify }
+      - config: { get_resource: config_send_notify_after_reboot }
+      - config: { get_resource: config_reboot }
+
+#  instance_console:
+#    type: OS::Nova::Server
+#    properties:
+#      name: handson9-console
+#      image: CentOS7
+#      flavor: m1.small
+#      key_name: { get_resource: key_pair }
+#      networks:
+#        - port: { get_resource: neutron_port_console }
+#      user_data_format: RAW
+#      user_data: { get_resource: server_init_console }
+
+  instance_openstack:
+    type: OS::Nova::Server
+    properties:
+      name: handson9-openstack-single
+      image: CentOS7
+      flavor: m1.large
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron_port_os_eth0 }
+        - port: { get_resource: neutron_port_os_eth1 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_openstack }
+
+outputs:
+#  instance1:
+#    description: server information
+#    value:
+#      name: { get_attr: [ instance_console, name ] }
+#      ip_address: { get_attr: [ neutron_port_console, fixed_ips, 0, ip_address ] }
+#      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+  instance:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack, name ] }
+      ip_address: { get_attr: [ neutron_port_os_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+  password:
+    description: server password for user "centos"
+    value: { get_param: password }
+  private_key:
+    description: private key for user "centos"
+    value: { get_attr: [ key_pair, private_key ] }

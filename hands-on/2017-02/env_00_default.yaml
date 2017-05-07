@@ -8,10 +8,26 @@ parameters:
     label: hands-on repository server
     description: Teahcer will gives the specific ip address.
 
-  password:
+  centos_password:
     type: string
     label: Server password for user "centos"
     description: Set your password to your instances.
+
+  openstack_tenantname:
+    type: string
+    default: tenant-xxxxxx
+
+  openstack_username:
+    type: string
+    default: user-xxxxxx
+
+  openstack_password:
+    type: string
+    default: pass-xxxxxx
+
+  openstack_authurl:
+    type: string
+    default: http://w.x.y.z:5000/v3
 
 resources:
   wait_handle:
@@ -37,7 +53,7 @@ resources:
   key_pair:
     type: OS::Nova::KeyPair
     properties:
-      name: concole-key
+      name: console-key
       save_private_key: true
 
   secg:
@@ -87,7 +103,7 @@ resources:
     properties:
       network: work-net
       fixed_ips:
-        - ip_address: 192.168.199.100
+        - ip_address: 192.168.199.10
       security_groups:
         - { get_resource: secg }
 
@@ -106,7 +122,7 @@ resources:
     type: OS::Heat::CloudConfig
     properties:
       cloud_config:
-        password: { get_param: password }
+        password: { get_param: centos_password }
         chpasswd: { expire: False }
         ssh_pwauth: True
         timezone: Asia/Tokyo
@@ -165,7 +181,12 @@ resources:
       config:
         str_replace:
           params:
-            _private_key_: { get_attr: [ key_pair, private_key ] }
+            $_private_key_: { get_attr: [ key_pair, private_key ] }
+            $_public_key_: { get_attr: [ key_pair, public_key ] }
+            $_os_tenantname_: { get_param: openstack_tenantname }
+            $_os_username_: { get_param: openstack_username }
+            $_os_password_: { get_param: openstack_password }
+            $_os_authurl_: { get_param: openstack_authurl }
           template: |
             #!/bin/bash -ex
             yum install -y \
@@ -183,37 +204,103 @@ resources:
             crudini \
             bash-completion \
             ansible \
-            graphviz
+            graphviz \
+            lynx \
+            plotnetcfg \
+            httpd
 
-            sudo -u centos wget reposerver/hands-on/openrc -O /home/centos/openrc
+            systemctl enable httpd
+            systemctl start httpd
 
-            sudo -u centos cat << _EOF_ > /home/centos/ansible_hosts
+            cat << _EOF_ > /home/centos/openrc
+            export OS_TENANT_NAME=$_os_tenant_name_
+            export OS_USERNAME=$_os_username_
+            export OS_PASSWORD=$_os_password_
+            export OS_AUTH_URL=$_os_authurl_
+            export OS_REGION_NAME=RegionOne
+            export OS_VOLUME_API_VERSION=2
+            export OS_IDENTITY_API_VERSION=3
+            export OS_USER_DOMAIN_NAME=${OS_USER_DOMAIN_NAME:-"Default"}
+            export OS_PROJECT_DOMAIN_NAME=${OS_PROJECT_DOMAIN_NAME:-"Default"}
+            _EOF_
+            chown centos:centos /home/centos/openrc
+
+            echo "$_private_key_" > /home/centos/.ssh/id_rsa
+            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
+            chown centos:centos /home/centos/.ssh/id_rsa
+            chown centos:centos /home/centos/.ssh/id_rsa.pub
+            chmod 600 /home/centos/.ssh/id_rsa
+            chmod 644 /home/centos/.ssh/id_rsa.pub
+
+            echo "$_private_key_" > /root/.ssh/id_rsa
+            echo "$_public_key_" > /root/.ssh/id_rsa.pub
+            chmod 600 /root/.ssh/id_rsa
+            chmod 644 /root/.ssh/id_rsa.pub
+
+            cat << _EOF_ > /home/centos/ansible_hosts
             [localhost]
             127.0.0.1 ansible_connection=local
 
-            [openstack-single]
+            [handson3-all]
+            192.168.199.21
+            192.168.199.22
+
+            [handson5-all]
+            192.168.199.31
+            192.168.199.32
+
+            [handson7-all]
             192.168.199.100
+
+            [handson9-all]
+            192.168.199.100
+
+            [handson11-all]
+            192.168.199.200
+            192.168.199.201
+            192.168.199.202
+
+            [handson13-all]
+
+            [handson15-all]
             _EOF_
 
-            sudo -u centos echo "_private_key_" > /home/centos/.ssh/id_rsa
-            chmod 600 /home/centos/.ssh/id_rsa
-
-            sudo -u centos mkdir -p ./.config/openstack
-            sudo -u centos cat << _EOF_ > /home/centos/.config/openstack/clouds.yaml
+            mkdir -p /home/centos/.config/openstack
+            cat << _EOF_ > /home/centos/.config/openstack/clouds.yaml
             clouds:
               topse01:
                 auth:
-                  auth_url: http://192.168.199.10:5000
+                  auth_url: $_os_authurl_
+                  project_name: $_os_tenantname_
+                  username: $_os_username_
+                  password: $_os_password_
+                identity_api_version: '2'
+                region_name: RegionOne
+              handson07:
+                auth:
+                  auth_url: http://192.168.199.100:5000
+                  project_name: admin
+                  username: admin
+                  password: password
+                identity_api_version: '2'
+                region_name: RegionOne
+              handson09:
+                auth:
+                  auth_url: http://192.168.199.100:5000
+                  project_name: admin
+                  username: admin
+                  password: password
+                identity_api_version: '2'
+                region_name: RegionOne
+              handson11:
+                auth:
+                  auth_url: http://192.168.199.200:5000
                   project_name: admin
                   username: admin
                   password: password
                 identity_api_version: '2'
                 region_name: RegionOne
             _EOF_
-
-            yum install -y httpd
-            systemctl enable httpd
-            systemctl start httpd
 
   server_init_console:
     type: OS::Heat::MultipartMime
@@ -229,7 +316,7 @@ resources:
   instance_console:
     type: OS::Nova::Server
     properties:
-      name: handson9-console
+      name: console
       image: CentOS7
       flavor: m1.small
       key_name: { get_resource: key_pair }
@@ -247,7 +334,7 @@ outputs:
       floating_ip: { get_attr: [floating_ip, floating_ip_address] }
   password:
     description: server password for user "centos"
-    value: { get_param: password }
+    value: { get_param: centos_password }
   private_key:
     description: private key for user "centos"
     value: { get_attr: [ key_pair, private_key ] }

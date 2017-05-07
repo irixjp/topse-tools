@@ -1,0 +1,197 @@
+heat_template_version: 2015-04-30
+
+description: 3rd Hands-on Environment
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will gives the specific ip address.
+
+  public_network:
+    type: string
+    label: Public network name or ID
+    description: Public network with floating IP addresses.
+    default: public
+
+  private_network:
+    type: string
+    label: Internal network name
+    description: Internal network name or ID
+    default: work-net
+
+  sec_group:
+    type: string
+    label: Security group name
+    description: Security group name
+    default: open-all
+
+  key:
+    type: string
+    label: Key name
+    description: Name of key-pair to be installed on the compute instance.
+    default: my-key
+
+  ip1:
+    type: string
+    default: 192.168.199.10
+
+  ip2:
+    type: string
+    default: 192.168.199.20
+
+  name1:
+    type: string
+    default: handson3-srv1
+
+  name2:
+    type: string
+    default: handson3-srv2
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 2
+      timeout: 600
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: { get_param: key }
+      save_private_key: true
+
+  neutron-port1:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: private_network }
+      fixed_ips:
+        - ip_address: { get_param: ip1 }
+      security_groups:
+        - { get_param: sec_group }
+
+  neutron-port2:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: private_network }
+      fixed_ips:
+        - ip_address: { get_param: ip2 }
+      security_groups:
+        - { get_param: sec_group }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_network }
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron-port1 }
+
+  passwd:
+    type: OS::Heat::RandomString
+    properties:
+      length: 5
+      sequence: lettersdigits
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_attr: [passwd, value] }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_init_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+          template: |
+            #!/bin/bash -ex
+            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel*
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+            yum clean all
+            yum install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
+            systemctl enable target.service
+            systemctl start target.service
+            yum install -y iscsi-initiator-utils
+            systemctl enable iscsid.service
+            systemctl start iscsid.service
+            yum install -y httpd
+            systemctl enable httpd.service
+            systemctl start httpd.service
+
+  config_send_notify_after_settings:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_send_notify_after_settings }
+
+  instance1:
+    type: OS::Nova::Server
+    properties:
+      name: handson3-srv1
+      image: CentOS7
+      flavor: m1.medium
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron-port1 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+
+  instance2:
+    type: OS::Nova::Server
+    properties:
+      name: handson3-srv2
+      image: CentOS7
+      flavor: m1.medium
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron-port2 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+
+outputs:
+  instance1:
+    description: server information
+    value:
+      name: { get_attr: [ instance1, name ] }
+      ip_address: { get_attr: [ neutron-port1, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+  instance2:
+    description: server information
+    value:
+      name: { get_attr: [ instance2, name ] }
+      ip_address: { get_attr: [ neutron-port2, fixed_ips, 0, ip_address ] }
+      floating_ip: "none"
+  password:
+    description: server password for user "centos"
+    value: { get_attr: [ passwd, value] }
+  private_key:
+    description: private key for user "centos"
+    value: { get_attr: [ key_pair, private_key ] }
