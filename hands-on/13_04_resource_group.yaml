@@ -43,7 +43,7 @@ resources:
     properties:
       count: { get_param: cluster_size }
       resource_def:
-        type: 15_02_simple_server.yaml
+        type: 13_02_simple_server.yaml
         properties:
           image: { get_param: image }
           flavor: { get_param: flavor }
