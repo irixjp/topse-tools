@@ -14,6 +14,26 @@ parameters:
     description: You set your password on your instances.
 
 resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 1800
+
+  wait_handle_after_reboot:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition_after_reboot:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle_after_reboot }
+      count: 1
+      timeout: 1800
+
   key_pair:
     type: OS::Nova::KeyPair
     properties:
