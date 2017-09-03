@@ -7,8 +7,8 @@
 yum install -y epel-release
 yum install -y qemu-kvm libvirt virt-manager virt-install \
                libguestfs libguestfs-tools \
-               docker-io \
-               screen tmux jq
+               docker \
+               screen tmux jq ansible git
 ```
 
 ディレクトリの設定
@@ -21,9 +21,10 @@ mv /var/lib/libvirt/images /mnt
 ln -s /mnt/images /var/lib/libvirt/images
 ```
 
-100GBのイメージまで作れるようにする（デフォ10GB）
-```/etc/sysconfig/docker-storage
-DOCKER_STORAGE_OPTIONS="-g /mnt/docker --storage-opt=dm.basesize=100G"
+300GBのイメージまで作れるようにする（デフォ10GB）
+```
+vi /etc/sysconfig/docker-storage
+DOCKER_STORAGE_OPTIONS="-g /mnt/docker --storage-opt=dm.basesize=300G"
 ```
 
 ```
@@ -33,4 +34,13 @@ systemctl enable docker
 systemctl start  docker
 
 reboot
+```
+
+```
+
+docker run -d -p 80:80 \
+       --name repo \
+       -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
+       -v /mnt/topse-tools/preparation:/var/www/html/preparation \
+       irixjp/topse-cloud-repo:newton-v1.0
 ```

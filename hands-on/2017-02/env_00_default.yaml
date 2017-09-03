@@ -19,7 +19,7 @@ parameters:
 
   openstack_username:
     type: string
-    default: user-xxxxxx
+    default: student-xxxxxx
 
   openstack_password:
     type: string
@@ -101,7 +101,7 @@ resources:
   neutron_port_console:
     type: OS::Neutron::Port
     properties:
-      network: work-net
+      network: { get_resource: private_network }
       fixed_ips:
         - ip_address: 192.168.199.10
       security_groups:
@@ -213,7 +213,7 @@ resources:
             systemctl start httpd
 
             cat << _EOF_ > /home/centos/openrc
-            export OS_TENANT_NAME=$_os_tenant_name_
+            export OS_TENANT_NAME=$_os_tenantname_
             export OS_USERNAME=$_os_username_
             export OS_PASSWORD=$_os_password_
             export OS_AUTH_URL=$_os_authurl_
