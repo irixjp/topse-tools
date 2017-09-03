@@ -1,12 +1,16 @@
 - name: Pre-settings for hands-on env
   hosts: allnode
   vars:
-    reposerver_ip: 157.1.205.1
+    reposerver_ip: 157.1.141.21
   tasks:
     - name: reposerver ip to hosts file
       lineinfile: >
         dest=/etc/hosts
         line='{{ reposerver_ip }} reposerver'
+
+    - name: test ping to reposerver
+      shell: |
+        ping -c 3 reposerver
 
     - name: set repositry
       shell: |
