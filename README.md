@@ -36,11 +36,19 @@ systemctl start  docker
 reboot
 ```
 
+リポジトリコンテナの起動
 ```
+git clone https://github.com/irixjp/topse-tools.git
+cd topse-tools/
 
+set BRANCH_NAME=2017-02
+git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+
+docker pull irixjp/topse-cloud-repo:newton-v1.0
 docker run -d -p 80:80 \
        --name repo \
        -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
        -v /mnt/topse-tools/preparation:/var/www/html/preparation \
        irixjp/topse-cloud-repo:newton-v1.0
 ```
+
