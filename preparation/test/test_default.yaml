@@ -202,12 +202,6 @@ outputs:
       name: { get_attr: [ instance, name ] }
       ip_address: { get_attr: [ neutron-port, fixed_ips, 0, ip_address ] }
       floating_ip: { get_attr: [floating_ip, floating_ip_address] }
-  password:
-    description: server password for user "centos"
-    value: { get_param: password }
-  private_key:
-    description: private key for user "centos"
-    value: { get_attr: [ key_pair, private_key ] }
-  reposerver:
-    description: repository server ip address
-    value: { get_param: reposerver }
+      password: { get_param: password }
+      private_key: { get_attr: [ key_pair, private_key ] }
+      reposerver: { get_param: reposerver }

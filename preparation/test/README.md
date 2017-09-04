@@ -65,7 +65,8 @@ openstack image list
 source openrc_teacher01
 heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.21" test_console
 
-heat output-show test_console --all
+source ../../hands-on/support.sh
+get_heat_output test_console floating_ip
 
 ssh centos@console
 
