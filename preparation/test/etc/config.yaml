@@ -1,4 +1,4 @@
-reposerver_ip: 157.1.141.28
+reposerver_ip: 157.1.141.21
 ansible_key_pub: "{{ lookup('file', 'ansible_key.pub') }}"
 rdo_hosts:
   - { "host": "rdo-cc",      "ip": "192.168.100.100" }

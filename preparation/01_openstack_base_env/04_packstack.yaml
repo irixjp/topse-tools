@@ -1,11 +1,11 @@
 - name: install packstack
   hosts: controller
   vars:
-    password: ^topse2016$
-    ctl_host: 157.1.205.2
-    net_host: 157.1.205.2
-    cpu_host: 157.1.205.2,157.1.205.3,157.1.205.4,157.1.205.5,157.1.205.6,157.1.205.7,157.1.205.8,157.1.205.9,157.1.205.10,157.1.205.11
-    tunn_nic: eth3
+    password: ^topse2017$
+    ctl_host: 157.1.141.22
+    net_host: 157.1.141.22
+    cpu_host: 157.1.141.23,157.1.141.24,157.1.141.25,157.1.141.26,157.1.141.27
+    tunn_nic: bond0
   tasks:
     - name: install openstack-packstack
       yum: name=openstack-packstack state=latest
@@ -35,16 +35,14 @@
         crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 300G
         crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 300G
 
-        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan,flat
         crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
         crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
         crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS extnet1:br-ex
         crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF {{ tunn_nic }}
-
       args:
         removes: /root/answer.txt
-
-
 
 - name: temporary disable selinux before run packstack
   hosts: allnode
@@ -52,8 +50,6 @@
     - name: setenforce 0
       shell: setenforce 0; exit 0
       ignore_errors: True
-
-
 
 - name: exec packstack
   hosts: controller

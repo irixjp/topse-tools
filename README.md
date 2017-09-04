@@ -36,6 +36,8 @@ systemctl start  docker
 reboot
 ```
 
+# Preparation
+
 リポジトリコンテナの起動
 ```
 git clone https://github.com/irixjp/topse-tools.git
@@ -44,11 +46,23 @@ cd topse-tools/
 set BRANCH_NAME=2017-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
+mkdir -p /mnt/dvd
+
 docker pull irixjp/topse-cloud-repo:newton-v1.0
 docker run -d -p 80:80 \
        --name repo \
        -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
        -v /mnt/topse-tools/preparation:/var/www/html/preparation \
+       -v /mnt/dvd:/var/www/html/dvd \
        irixjp/topse-cloud-repo:newton-v1.0
+
+cd /mnt
+curl -O localhost/images/Cent7-Mini.iso
+mount -o loop /mnt/Cent7-Mini.iso /mnt/dvd/
 ```
 
+各ノードとの疎通確認
+```
+cd /mnt/topse-tools/preparation/01_openstack_base_env
+ansible allnode -i ansible_hosts -u sysuser -m ping
+```

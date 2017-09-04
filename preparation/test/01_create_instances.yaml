@@ -4,15 +4,6 @@
     - etc/config.yaml
 
   tasks:
-  - name: cleanup existing vms
-    shell: |
-      virsh destroy  test-{{ item["host"] }}
-      sleep 3
-      virsh undefine test-{{ item["host"] }} --remove-all-storage
-      sleep 3
-      exit 0
-    with_items: "{{ rdo_hosts }}"
-
   - name: The preparation /tmp/simple-cent7-ks-xxx.cfg before creating vms
     template: >
       src=template/simple-centos7-ks.cfg
@@ -38,7 +29,7 @@
       --ram=8192 \
       --cpu host \
       --disk /var/lib/libvirt/images/test-"{{ item['host'] }}".qcow2,format=qcow2 \
-      --network network=default \
+      --network network=virbr100 \
       --location=http://{{ reposerver_ip }}/dvd/ \
       --initrd-inject simple-centos7-ks-"{{ item['host'] }}".cfg \
       --extra-args='inst.ks=file:/simple-centos7-ks-{{ item["host"] }}.cfg console=tty0 console=ttyS0,115200n8 serial'
