@@ -50,7 +50,7 @@ reboot
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-set BRANCH_NAME=2017-02
+BRANCH_NAME=2017-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 mkdir -p /mnt/dvd

@@ -22,7 +22,17 @@ ansible-playbook -i etc/ansible_hosts -u root --private-key=ansible_key 06_reboo
 
 構築環境での確認
 ```
+ssh -o "StrictHostKeyChecking=no" root@192.168.100.100 -i /mnt/topse-tools/preparation/test/ansible_key
+git clone https://github.com/irixjp/topse-tools.git
+cd topse-tools/
+
+BRANCH_NAME=2017-02
+git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+
+cd ~/
 source keystonerc_admin
+
+cd ~/topse-tools/preparation/test/
 heat stack-create --poll -f 07_heat_basic_setting.yaml default
 
 openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 topse01
@@ -46,12 +56,28 @@ glance --os-image-api-version 1 image-create \
 --copy-from http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2 \
 --is-public True --is-protected True \
 --progress
+
+openstack image list
 ```
 
 リソース作成テスト1
 ```
 source openrc_teacher01
 heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.21" test_console
+
+heat output-show test_console --all
+
+ssh centos@console
+
+git clone https://github.com/irixjp/topse-tools.git
+cd topse-tools/
+
+BRANCH_NAME=2017-02
+git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+
+cd preparation/test/
+source openrc_teacher01
+source ../../handson/support.sh
 ```
 
 リソース作成テスト2
@@ -63,6 +89,8 @@ heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTE
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.large" test_massive4
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.xlarge" test_massive5
 
+nova list
+
 heat stack-delete -y test_massive1
 heat stack-delete -y test_massive2
 heat stack-delete -y test_massive3
@@ -72,11 +100,14 @@ heat stack-delete -y test_massive5
 
 リソース作成テスト3
 ```
-heat stack-create --poll -f test_cluster.yaml -P "reposerver=157.1.141.21" test_cluster
-URL=`heat output-show test_cluster lburl | python -c "import sys; print(input())"`
+repo=`get_reposerver`; echo $repo
+heat stack-create --poll -f test_cluster.yaml -P "reposerver=${repo}" test_cluster
+
+URL=`get_heat_output test_cluster lburl`; echo $URL
 for i in `seq 1 20`; do curl $URL; sleep 1; done
 
-heat stack-update -f test_cluster.yaml -P "reposerver=157.1.141.21" -P cluster_size=6 test_cluster
+heat stack-update -f test_cluster.yaml -P "reposerver=${repo}" -P cluster_size=6 test_cluster
+heat stack-list
 for i in `seq 1 60`; do curl $URL; sleep 1; done
 
 heat stack-delete -y test_cluster
@@ -95,5 +126,5 @@ nova list
 
 heat stack-delete -y test_update_stack
 
-heat stack-delete -y console
+heat stack-delete -y test_console
 ```
