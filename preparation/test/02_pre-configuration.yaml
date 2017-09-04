@@ -21,6 +21,7 @@
       mkdir -p /root/temp
       mv /etc/yum.repos.d/* /root/temp
       curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+
       yum clean all
       yum repolist
     args:

@@ -25,10 +25,11 @@
       crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 20G
       crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 20G
 
-      crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan
+      crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan,flat
       crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
       crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
       crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL y
+      crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS extnet1:br-ex
       crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF {{ tunn_nic }}
     args:
       removes: /root/answer.txt

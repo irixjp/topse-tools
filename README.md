@@ -27,6 +27,13 @@ vi /etc/sysconfig/docker-storage
 DOCKER_STORAGE_OPTIONS="-g /mnt/docker --storage-opt=dm.basesize=300G"
 ```
 
+Nested KVMの有効化
+```
+echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
+modprobe -r kvm_intel
+modprobe kvm_intel
+```
+
 ```
 systemctl stop firewalld
 systemctl disable firewalld
@@ -59,6 +66,8 @@ docker run -d -p 80:80 \
 cd /mnt
 curl -O localhost/images/Cent7-Mini.iso
 mount -o loop /mnt/Cent7-Mini.iso /mnt/dvd/
+
+docker stop repo; docker start repo
 ```
 
 各ノードとの疎通確認
