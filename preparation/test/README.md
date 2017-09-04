@@ -51,7 +51,7 @@ glance --os-image-api-version 1 image-create \
 リソース作成テスト1
 ```
 source openrc_teacher01
-heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.21" console
+heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.21" test_console
 ```
 
 リソース作成テスト2
@@ -94,4 +94,6 @@ heat stack-update -f test_simple_server.yaml -P "flavor=m1.medium" test_update_s
 nova list
 
 heat stack-delete -y test_update_stack
+
+heat stack-delete -y console
 ```

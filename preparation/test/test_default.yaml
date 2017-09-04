@@ -146,7 +146,8 @@ resources:
             lynx \
             plotnetcfg \
             graphviz \
-            httpd
+            httpd \
+            git
 
             systemctl enable httpd
             systemctl start httpd
@@ -191,6 +192,8 @@ resources:
         - port: { get_resource: neutron-port }
       user_data_format: RAW
       user_data: { get_resource: server_init }
+      metadata:
+        reposerver: { get_param: reposerver }
 
 outputs:
   console:
