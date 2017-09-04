@@ -5,5 +5,5 @@ function get_reposerver () {
 }
 
 function get_heat_output () {
-    heat output-show $1 $2 | python -c "import sys; print(input())
+    heat output-show $1 $2 | python -c "import sys; print(input())"
 }
