@@ -13,7 +13,7 @@
       FIP_CIDR=192.168.100.0/24
       EXT_GW=192.168.100.254
 
-      neutron net-create --router:external public
+      neutron net-create --router:external=True --provider:network_type flat --provider:physical_network extnet1
       neutron subnet-create --name public-subnet \
       --allocation-pool start=${FIP_START},end=${FIP_END} \
       --disable-dhcp \

@@ -14,5 +14,8 @@ export ANSIBLE_HOST_KEY_CHECKING=False
 
 ansible-playbook -i etc/ansible_hosts -u root 01_create_instances.yaml
 ansible-playbook -i etc/ansible_hosts -u root --private-key=ansible_key 02_pre-configuration.yaml
+ansible-playbook -i etc/ansible_hosts -u root --private-key=ansible_key 03_reboot.yaml
+ansible-playbook -i etc/ansible_hosts -u root --private-key=ansible_key 04_test-pre-configurations.yaml
+ansible-playbook -i etc/ansible_hosts -u root --private-key=ansible_key 05_install-openstack.yaml
 
 ```
