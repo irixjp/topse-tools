@@ -36,6 +36,7 @@
       - qemu-kvm
       - bash-completion
       - openstack-utils
+      - git
 
   - name: update all packages
     yum: name=* state=latest

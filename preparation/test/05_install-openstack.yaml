@@ -124,3 +124,17 @@
       openstack-config --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
     args:
       removes: /etc/nova/nova.conf
+
+- name: allow login to nova user
+  hosts: openstack-all
+  tasks:
+  - name: usermod
+    shell: usermod -s /bin/bash nova
+
+  - name: copy ssh_config
+    copy:
+      src: template/ssh_config
+      dest: /var/lib/nova/.ssh/config
+      owner: nova
+      group: nova
+      mode: 0644

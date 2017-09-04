@@ -18,15 +18,15 @@
 
   - name: create vms
     shell: |
-      qemu-img create -f qcow2 /var/lib/libvirt/images/test-{{ item['host'] }}.qcow2 100G
+      qemu-img create -f qcow2 /var/lib/libvirt/images/test-{{ item['host'] }}.qcow2 300G
       sleep 2
       virt-install \
       --name=test-"{{ item['host'] }}" \
       --virt-type kvm --hvm \
       --accelerate \
       --nographics --noautoconsole \
-      --vcpus=2 \
-      --ram=8192 \
+      --vcpus=8 \
+      --ram=24576 \
       --cpu host \
       --disk /var/lib/libvirt/images/test-"{{ item['host'] }}".qcow2,format=qcow2 \
       --network network=virbr100 \
