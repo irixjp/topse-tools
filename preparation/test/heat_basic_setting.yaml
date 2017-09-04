@@ -5,4 +5,21 @@ description: Setup default environment.
 parameters:
 
 resources:
-  
+  public:
+    type: OS::Neutron::ProviderNet
+    properties:
+      name: public
+      network_type: flat
+      physical_network: extnet1
+      router_external: True
+
+  public-subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: public-subnet
+      allocation_pools: [{"start": "192.168.100.151", "end": "192.168.100.200"}]
+      cidr: 192.168.100.0/24
+      enable_dhcp: False
+      gateway_ip: 192.168.100.254
+      ip_version: 4
+      network: { get_resource: public }
