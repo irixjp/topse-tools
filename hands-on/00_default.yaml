@@ -154,6 +154,10 @@ resources:
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
+
+            wget reposerver/hands-on/support.sh -O /home/centos/support.sh
+            chown centos:centos /home/centos/support.sh
+
             echo "$_private_key_" > /home/centos/.ssh/id_rsa
             echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
             chown centos:centos /home/centos/.ssh/id_rsa
