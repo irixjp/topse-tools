@@ -32,6 +32,11 @@ git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 cd ~/
 source keystonerc_admin
 
+nova service-list
+cinder service-list
+heat service-list
+neutron agent-list
+
 cd ~/topse-tools/preparation/test/
 heat stack-create --poll -f 07_heat_basic_setting.yaml default
 
@@ -133,4 +138,9 @@ nova list
 heat stack-delete -y test_update_stack
 
 heat stack-delete -y test_console
+```
+
+環境の削除
+```
+ansible-playbook -i etc/ansible_hosts -u root --private-key=ansible_key 99_delete_all_vms.yaml
 ```

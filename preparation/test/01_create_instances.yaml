@@ -18,7 +18,7 @@
 
   - name: create vms
     shell: |
-      qemu-img create -f qcow2 /var/lib/libvirt/images/test-{{ item['host'] }}.qcow2 300G
+      qemu-img create -f qcow2 /var/lib/libvirt/images/test-{{ item['host'] }}.qcow2 500G
       sleep 2
       virt-install \
       --name=test-"{{ item['host'] }}" \
