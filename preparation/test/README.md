@@ -124,6 +124,12 @@ nova list
 heat stack-update -f test_simple_server.yaml -P "flavor=m1.medium" test_update_stack
 nova list
 
+heat stack-update -f test_simple_server.yaml -P "flavor=m1.large" test_update_stack
+nova list
+
+heat stack-update -f test_simple_server.yaml -P "flavor=m1.xlarge" test_update_stack
+nova list
+
 heat stack-delete -y test_update_stack
 
 heat stack-delete -y test_console
