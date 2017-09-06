@@ -62,6 +62,13 @@ glance --os-image-api-version 1 image-create \
 --is-public True --is-protected True \
 --progress
 
+glance --os-image-api-version 1 image-create \
+--name "Docker" \
+--disk-format qcow2 --container-format bare \
+--copy-from http://reposerver/images/Docker.qcow2 \
+--is-public True --is-protected True \
+--progress
+
 openstack image list
 ```
 
