@@ -97,6 +97,11 @@ mount -o loop /mnt/Cent7-Mini.iso /mnt/dvd/
 docker stop repo; docker start repo
 ```
 
+各ノードのSSHD設定
+```
+ansible openstack-all -i production -u sysuser -s -m shell -a 'cat /home/sysuser/.ssh/authorized_keys > /root/.ssh/authorized_keys'
+sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd
+```
 
 使い方
 ------------

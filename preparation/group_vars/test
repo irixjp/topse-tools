@@ -6,3 +6,5 @@ rdo_hosts:
 gateway: 192.168.100.254
 dns_server: 192.168.100.254
 tunn_nic: eth0
+cinder_size: 20G
+swift_size: 20G

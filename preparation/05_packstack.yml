@@ -25,8 +25,8 @@
       crudini --set /root/answer.txt general CONFIG_COMPUTE_HOSTS   {{ com_hosts }}
 
       crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
-      crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 20G
-      crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 20G
+      crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE {{ cinder_size }}
+      crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE {{ swift_size }}
 
       crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan,flat
       crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan

@@ -1,2 +1,4 @@
 ---
 tunn_nic: bond0
+cinder_size: 500G
+swift_size: 500G
