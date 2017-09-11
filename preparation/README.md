@@ -66,10 +66,18 @@ mkdir -p /mnt/dvd
 
 テスト用仮想ネットワークの作成
 ```
+cd topse-tools/preparation/utils
 bash ./create_virtual_network.sh
 virsh net-define ./virbr100.xml
 virsh net-start virbr100
 virsh net-autostart virbr100
+```
+
+認証キーの作成
+```
+cd topse-tools/preparation/utils
+rm -f ansible*
+ssh-keygen -f ansible_key -P '' -t rsa
 ```
 
 リポジトリコンテナの起動

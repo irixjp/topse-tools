@@ -107,5 +107,5 @@
 
   - name: ssh connection test each nodes
     shell:
-      ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@{{ item['ip'] }} hostname
-    with_items: "{{ rdo_hosts }}"
+      ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@{{ item }} hostname
+    with_items: "{{ hostvars[inventory_hostname]['groups']['openstack-all'] }}"
