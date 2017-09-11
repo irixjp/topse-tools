@@ -16,7 +16,7 @@
 157.1.141.26
 157.1.141.27
 
-[test:children]
+[production:children]
 openstack-all
 openstack-cc
 openstack-compute
