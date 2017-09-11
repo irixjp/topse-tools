@@ -6,7 +6,7 @@
   tasks:
   - name: The preparation /tmp/simple-cent7-ks-xxx.cfg before creating vms
     template: >
-      src=utils/simple-centos7-ks.cfg.2
+      src=utils/simple-centos7-ks.cfg.j2
       dest=/tmp/simple-centos7-ks-{{ item["host"] }}.cfg
     when:
       - reposerver_ip is defined
