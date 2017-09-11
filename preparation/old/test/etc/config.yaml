@@ -1,0 +1,13 @@
+reposerver_ip: 157.1.141.21
+ansible_key_pub: "{{ lookup('file', 'ansible_key.pub') }}"
+rdo_hosts:
+  - { "host": "rdo-cc",      "ip": "192.168.100.100" }
+  - { "host": "rdo-compute1","ip": "192.168.100.101" }
+  - { "host": "rdo-compute2","ip": "192.168.100.102" }
+gateway: 192.168.100.254
+dns_server: 192.168.100.254
+password: password
+ctl_host: "{{ rdo_hosts[0]['ip'] }}"
+net_host: "{{ rdo_hosts[0]['ip'] }}"
+cpu_host: "{{ rdo_hosts[1]['ip'] }},{{ rdo_hosts[2]['ip'] }}"
+tunn_nic: eth0

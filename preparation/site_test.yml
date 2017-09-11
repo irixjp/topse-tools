@@ -1,0 +1,3 @@
+---
+- include: 00_create_instances.yml
+- include: 01_pre_connection_test.yml

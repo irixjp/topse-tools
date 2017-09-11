@@ -1,0 +1,8 @@
+---
+- name: connection test to all nodes
+  hosts: all
+  gather_facts: no
+  roles:
+    - common
+  tasks:
+    - ping:

@@ -1,0 +1,14 @@
+- name: delete all vms
+  hosts: localhost
+  vars_files:
+    - etc/config.yaml
+
+  tasks:
+  - name: cleanup existing vms
+    shell: |
+      virsh destroy  test-{{ item["host"] }}
+      sleep 3
+      virsh undefine test-{{ item["host"] }} --remove-all-storage
+      sleep 3
+      exit 0
+    with_items: "{{ rdo_hosts }}"
