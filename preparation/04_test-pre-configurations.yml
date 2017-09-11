@@ -1,7 +1,5 @@
 - name: Test Pre-configurations
   hosts: openstack-all
-  vars_files:
-    - etc/config.yaml
   tasks:
 
   - name: ping
