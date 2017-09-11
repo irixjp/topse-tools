@@ -1,0 +1,5 @@
+- name: reboot node and check settings
+  hosts: openstack-all
+  gather_facts: no
+  roles:
+    - reboot

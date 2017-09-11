@@ -92,7 +92,7 @@
 
   - name: put public ssh key
     copy:
-      src: ansible_key.pub
+      src: utils/ansible_key.pub
       dest: /root/.ssh/id_rsa.pub
       owner: root
       group: root

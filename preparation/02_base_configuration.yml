@@ -1,6 +1,0 @@
----
-- name: initial setup2
-  hosts: all
-  gather_facts: no
-  roles:
-    - common
