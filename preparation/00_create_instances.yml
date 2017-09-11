@@ -1,5 +1,8 @@
 - name: create vms for openstack
   hosts: localhost
+  roles:
+  - debug_vars
+
   tasks:
   - name: The preparation /tmp/simple-cent7-ks-xxx.cfg before creating vms
     template: >
