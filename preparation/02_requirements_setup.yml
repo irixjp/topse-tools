@@ -76,7 +76,7 @@
 
   - name: put private ssh key
     copy:
-      src: ansible_key
+      src: utils/ansible_key
       dest: /root/.ssh/id_rsa
       owner: root
       group: root
