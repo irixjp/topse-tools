@@ -1,2 +1,4 @@
 ---
 reposerver_ip: 157.1.141.21
+password: password
+ansible_key_pub: "{{ lookup('file', 'utils/ansible_key.pub') }}"
