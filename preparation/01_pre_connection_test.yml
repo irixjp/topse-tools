@@ -3,6 +3,5 @@
   hosts: all
   gather_facts: no
   roles:
-    - common
-  tasks:
-    - ping:
+    - debug_vars
+    - wait_boot

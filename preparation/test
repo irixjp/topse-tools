@@ -1,6 +1,11 @@
 [localhost]
 127.0.0.1 ansible_connection=local
 
+[openstack-all]
+192.168.100.100
+192.168.100.101
+192.168.100.102
+
 [openstack-cc]
 192.168.100.100
 
@@ -10,5 +15,6 @@
 
 [test:children]
 localhost
+openstack-all
 openstack-cc
 openstack-compute

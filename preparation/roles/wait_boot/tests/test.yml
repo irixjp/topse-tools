@@ -1,0 +1,5 @@
+---
+- hosts: localhost
+  remote_user: root
+  roles:
+    - /Users/t-nakajima/temp/topse-tools/preparation/roles/wait_boot
