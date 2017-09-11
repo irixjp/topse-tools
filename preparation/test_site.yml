@@ -1,6 +1,6 @@
 ---
 - include: 00_create_instances.yml
 - include: 01_pre_connection_test.yml
-- include: 02_pre-configuration.yml
+- include: 02_requirements_setup.yml
 - include: 03_reboot.yml
-- include: 04_test-pre-configurations.yml
+- include: 04_test_requiremetns.yml

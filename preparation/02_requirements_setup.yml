@@ -3,12 +3,6 @@
   gather_facts: no
   tasks:
 
-  - name: wait for SSH port up
-    local_action: wait_for host={{ inventory_hostname }} port=22 state=started delay=10 timeout=300
-
-  - name: ping
-    ping:
-
   - name: reposerver ip to hosts file
     lineinfile: >
       dest=/etc/hosts
