@@ -54,7 +54,7 @@
 
   - name: enable ip forwarding
     template: >
-      src=template/00-system.conf
+      src=utils/00-system.conf
       dest=/usr/lib/sysctl.d/00-system.conf
       owner=root
       group=root
