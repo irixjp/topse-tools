@@ -120,7 +120,7 @@ for i in `seq 1 20`; do curl $URL; sleep 1; done
 
 heat stack-update -f test_cluster.yaml -P "reposerver=${repo}" -P cluster_size=6 test_cluster
 heat stack-list
-for i in `seq 1 60`; do curl $URL; sleep 1; done
+for i in `seq 1 60`; do curl $URL; sleep 2; done
 
 heat stack-delete -y test_cluster
 ```

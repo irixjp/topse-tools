@@ -1,4 +1,2 @@
 ---
-gateway: 192.168.100.254
-dns_server: 192.168.100.254
 tunn_nic: bond0

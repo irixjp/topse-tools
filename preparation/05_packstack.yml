@@ -104,8 +104,6 @@
       group=root
       mode=0644
     when:
-      - gateway is defined
-      - dns_server is defined
       - tunn_nic is defined
 
 - name: edit openstack conf files on compute node
