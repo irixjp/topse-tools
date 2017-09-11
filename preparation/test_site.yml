@@ -4,3 +4,5 @@
 - include: 02_requirements_setup.yml
 - include: 03_reboot.yml
 - include: 04_test_requiremetns.yml
+- include: 05_packstack.yml
+- include: 06_reboot.yml
