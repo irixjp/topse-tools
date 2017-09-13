@@ -40,7 +40,7 @@ neutron agent-list
 cd ~/topse-tools/preparation/test/
 heat stack-create --poll -f 07_heat_basic_setting.yaml default
 
-openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 topse01
+openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 --ports 300 topse01
 openstack quota set --instances 5 --floating-ips 2 --ram 40960 --volumes 10 --gigabytes 10 --cores 20 topse02
 
 nova flavor-delete 1
@@ -102,6 +102,7 @@ heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTE
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.xlarge" test_massive5
 
 nova list
+nova list | grep test_massive | wc -l
 
 heat stack-delete -y test_massive1
 heat stack-delete -y test_massive2
