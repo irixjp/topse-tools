@@ -1,7 +1,7 @@
 #!/bin/bash -x
 
 cd /root
-source keystonerc_admin
+source ~/keystonerc_admin
 
 USERLIST='0000
 9999'
