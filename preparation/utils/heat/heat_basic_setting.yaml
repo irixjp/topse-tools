@@ -21,11 +21,11 @@ resources:
     properties:
       name: public-subnet
       allocation_pools:
-        - start: 192.168.100.151
-          end: 192.168.100.200
-      cidr: 192.168.100.0/24
+        - start: 157.1.141.101
+          end: 157.1.141.250
+      cidr: 157.1.140.0/23
       enable_dhcp: False
-      gateway_ip: 192.168.100.254
+      gateway_ip: 157.1.140.1
       ip_version: 4
       network: { get_resource: public }
 
