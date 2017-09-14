@@ -12,6 +12,12 @@ RUN echo xxx.xxx.xxx.xxx reposerver >> /etc/hosts && cat /etc/hosts && \
 
 RUN echo "This is your_name's page" >> /var/www/html/index.html
 
+RUN echo '#!/bin/bash'                                      >  /entrypoint.sh
+RUN echo 'rm -Rf /var/run/httpd && mkdir -p /var/run/httpd' >> /entrypoint.sh
+RUN echo '/sbin/httpd -DFOREGROUND'                         >> /entrypoint.sh
+
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
 
-CMD /sbin/httpd -DFOREGROUND
+CMD /entrypoint.sh
