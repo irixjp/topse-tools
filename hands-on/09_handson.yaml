@@ -243,7 +243,7 @@ resources:
         cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
         chmod 600 /root/.ssh/authorized_keys
 
-        yum install -y openstack-packstack openstack-packstack-doc python-netaddr
+        yum install -y openstack-packstack openstack-packstack-doc python-netaddr openstack-utils
         export HOME=/root
         packstack --dry-run --allinone --default-password='password' --provision-demo=n --gen-answer-file=/root/answer.txt
         crudini --set /root/answer.txt general CONFIG_NAGIOS_INSTALL n
