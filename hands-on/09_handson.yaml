@@ -12,6 +12,7 @@ parameters:
     type: string
     label: Server password
     description: You set your password on your instances.
+    default: password
 
 resources:
   wait_handle:
@@ -60,15 +61,6 @@ resources:
     properties:
       router: Ext-Router
       subnet: { get_resource: floating_subnet }
-
-#  neutron_port_console:
-#    type: OS::Neutron::Port
-#    properties:
-#      network: work-net
-#      fixed_ips:
-#        - ip_address: 192.168.199.250
-#      security_groups:
-#        - open-all
 
   neutron_port_os_eth0:
     type: OS::Neutron::Port
@@ -160,58 +152,6 @@ resources:
         #!/bin/bash -ex
         reboot
 
-#  config_consle:
-#    type: OS::Heat::SoftwareConfig
-#    properties:
-#      config:
-#        str_replace:
-#          params:
-#            _private_key_: { get_attr: [ key_pair, private_key ] }
-#          template: |
-#            #!/bin/bash -ex
-#            yum install -y \
-#            python2-novaclient \
-#            python2-cinderclient \
-#            python2-keystoneclient \
-#            python2-neutronclient \
-#            python2-glanceclient \
-#            python2-swiftclient \
-#            python2-heatclient \
-#            python-openstackclient \
-#            jq \
-#            wget \
-#            vim \
-#            crudini \
-#            bash-completion \
-#            ansible
-# 
-#            sudo -u centos wget reposerver/hands-on/openrc -O /home/centos/openrc
-# 
-#            sudo -u centos cat << _EOF_ > /home/centos/ansible_hosts
-#            [localhost]
-#            127.0.0.1 ansible_connection=local
-# 
-#            [openstack-single]
-#            192.168.199.100
-#            _EOF_
-# 
-#            sudo -u centos echo "_private_key_" > /home/centos/.ssh/id_rsa
-#            chmod 600 /home/centos/.ssh/id_rsa
-# 
-#            sudo -u centos mkdir -p ./.config/openstack
-#            sudo -u centos cat << _EOF_ > /home/centos/.config/openstack/clouds.yaml
-#            clouds:
-#              topse01:
-#                auth:
-#                  auth_url: http://192.168.199.10:5000
-#                  project_name: admin
-#                  username: admin
-#                  password: password
-#                identity_api_version: '2'
-#                region_name: RegionOne
-#            _EOF_
-
-
   config_openstack:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -253,10 +193,11 @@ resources:
         crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
         crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE 30G
         crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE 3G
-        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan,flat
         crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
         crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
         crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS extnet1:br-ex
         crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF eth0
         setenforce 0
         packstack --answer-file=/root/answer.txt
@@ -293,18 +234,6 @@ resources:
         OVSDHCPINTERFACES="eth1"
         EOF
 
-
-#  server_init_console:
-#    type: OS::Heat::MultipartMime
-#    properties:
-#      parts:
-#      - config: { get_resource: config_set_passwd }
-#      - config: { get_resource: config_set_repo }
-#      - config: { get_resource: config_consle }
-#      - config: { get_resource: config_send_notify }
-#      - config: { get_resource: config_send_notify_after_reboot }
-#      - config: { get_resource: config_reboot }
-
   server_init_openstack:
     type: OS::Heat::MultipartMime
     properties:
@@ -315,18 +244,6 @@ resources:
       - config: { get_resource: config_send_notify }
       - config: { get_resource: config_send_notify_after_reboot }
       - config: { get_resource: config_reboot }
-
-#  instance_console:
-#    type: OS::Nova::Server
-#    properties:
-#      name: handson9-console
-#      image: CentOS7
-#      flavor: m1.small
-#      key_name: { get_resource: key_pair }
-#      networks:
-#        - port: { get_resource: neutron_port_console }
-#      user_data_format: RAW
-#      user_data: { get_resource: server_init_console }
 
   instance_openstack:
     type: OS::Nova::Server
@@ -342,12 +259,6 @@ resources:
       user_data: { get_resource: server_init_openstack }
 
 outputs:
-#  instance1:
-#    description: server information
-#    value:
-#      name: { get_attr: [ instance_console, name ] }
-#      ip_address: { get_attr: [ neutron_port_console, fixed_ips, 0, ip_address ] }
-#      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
   instance:
     description: server information
     value:

@@ -65,12 +65,12 @@ echo "## creating routers"
 neutron router-create Closed-Router
 #neutron router-gateway-set Ext-Router public
 
-echo "## creating 1st network"
-neutron net-create work-net
-neutron subnet-create --ip-version 4 --gateway 10.10.10.254 \
-        --name work-subnet --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4 \
-        work-net 10.10.10.0/24
-neutron router-interface-add Ext-Router work-subnet
+#echo "## creating 1st network"
+#neutron net-create work-net
+#neutron subnet-create --ip-version 4 --gateway 10.10.10.254 \
+#        --name work-subnet --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4 \
+#        work-net 10.10.10.0/24
+#neutron router-interface-add Ext-Router work-subnet
 
 echo "## creating 2nd network"
 neutron net-create 2nd-net
