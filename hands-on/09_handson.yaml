@@ -22,7 +22,7 @@ resources:
     type: OS::Heat::WaitCondition
     properties:
       handle: { get_resource: wait_handle }
-      count: 1
+      count: 3
       timeout: 1800
 
   wait_handle_after_reboot:
@@ -137,11 +137,11 @@ resources:
       config:
         str_replace:
           params:
-            wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
+            __heat_wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
             cat << EOF >> /etc/rc.d/rc.local
-            wc_notify --data-binary '{"status": "SUCCESS"}'
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
             EOF
             chmod u+x /etc/rc.d/rc.local
 
@@ -152,7 +152,7 @@ resources:
         #!/bin/bash -ex
         reboot
 
-  config_openstack:
+  config_pre_openstack:
     type: OS::Heat::SoftwareConfig
     properties:
       config: |
@@ -183,6 +183,11 @@ resources:
         cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
         chmod 600 /root/.ssh/authorized_keys
 
+  config_packstack:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
         yum install -y openstack-packstack openstack-packstack-doc python-netaddr openstack-utils
         export HOME=/root
         packstack --dry-run --allinone --default-password='password' --provision-demo=n --gen-answer-file=/root/answer.txt
@@ -202,6 +207,11 @@ resources:
         setenforce 0
         packstack --answer-file=/root/answer.txt
 
+  config_after_openstack:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
         openstack-config --set /etc/cinder/cinder.conf lvm volume_clear none
         openstack-config --set /etc/nova/nova.conf DEFAULT api_rate_limit false
         openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
@@ -240,7 +250,11 @@ resources:
       parts:
       - config: { get_resource: config_set_passwd }
       - config: { get_resource: config_set_repo }
-      - config: { get_resource: config_openstack }
+      - config: { get_resource: config_pre_openstack }
+      - config: { get_resource: config_send_notify }
+      - config: { get_resource: config_packstack }
+      - config: { get_resource: config_send_notify }
+      - config: { get_resource: config_after_openstack }
       - config: { get_resource: config_send_notify }
       - config: { get_resource: config_send_notify_after_reboot }
       - config: { get_resource: config_reboot }
