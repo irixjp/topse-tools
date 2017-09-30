@@ -173,21 +173,39 @@ resources:
   config_pre_openstack_common:
     type: OS::Heat::SoftwareConfig
     properties:
-      config: |
-        #!/bin/bash -ex
-        yum install -y wget crudini vim bash-completion lynx jq plotnetcfg graphviz openstack-utils
-        yum update -y
+      config:
+        str_replace:
+          params:
+            $_private_key_: { get_attr: [ key_pair, private_key ] }
+            $_public_key_: { get_attr: [ key_pair, public_key ] }
+          template: |
+            #!/bin/bash -ex
+            yum install -y wget crudini vim bash-completion lynx jq plotnetcfg graphviz openstack-utils
+            yum update -y
 
-        rm -f /etc/yum.repos.d/CentOS*
-        rm -f /etc/yum.repos.d/epel-*
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel-*
 
-        echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-        sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-        mkdir -p /root/.ssh
-        chmod 700 /root/.ssh
-        rm -f /root/.ssh/authorized_keys
-        cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
-        chmod 600 /root/.ssh/authorized_keys
+            echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+            sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+            rm -f /root/.ssh/authorized_keys
+            cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+
+            echo "$_private_key_" > /home/centos/.ssh/id_rsa
+            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
+            chown centos:centos /home/centos/.ssh/id_rsa
+            chown centos:centos /home/centos/.ssh/id_rsa.pub
+            chmod 600 /home/centos/.ssh/id_rsa
+            chmod 644 /home/centos/.ssh/id_rsa.pub
+
+            echo "$_private_key_" > /root/.ssh/id_rsa
+            echo "$_public_key_" > /root/.ssh/id_rsa.pub
+            chmod 600 /root/.ssh/id_rsa
+            chmod 644 /root/.ssh/id_rsa.pub
+
 
   config_pre_openstack_cc:
     type: OS::Heat::SoftwareConfig

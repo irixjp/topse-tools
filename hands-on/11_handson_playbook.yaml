@@ -1,0 +1,39 @@
+- hosts: all
+  gather_facts: yes
+  max_fail_percentage: 0
+
+  tasks:
+    - name: Diasble some services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: False
+      with_items:
+        - NetworkManager
+        - firewalld
+
+    - name: Enable some services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: True
+      with_items:
+        - network
+
+    - name: Enable epel repository
+      yum:
+        name: epel-release
+        state: latest
+
+    - name: Install requirement packages
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - python-pip
+        - python-devel
+        - libffi-devel
+        - gcc openssl-devel
+        - libselinux-python
+        - git
+        - crudini
