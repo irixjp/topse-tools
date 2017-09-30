@@ -231,6 +231,7 @@ resources:
       parts:
       - config: { get_resource: config_set_passwd }
       - config: { get_resource: config_set_repo }
+      - config: { get_resource: config_send_notify }
       - config: { get_resource: config_pre_openstack_common }
       - config: { get_resource: config_pre_openstack_cc }
       - config: { get_resource: config_send_notify }
@@ -243,6 +244,7 @@ resources:
       parts:
       - config: { get_resource: config_set_passwd }
       - config: { get_resource: config_set_repo }
+      - config: { get_resource: config_send_notify }
       - config: { get_resource: config_pre_openstack_common }
       - config: { get_resource: config_send_notify }
       - config: { get_resource: config_send_notify_after_reboot }
