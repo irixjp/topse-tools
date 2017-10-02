@@ -12,6 +12,11 @@
     tunn_nic: eth0
 
   tasks:
+  - name: install packstack
+    yum:
+      name: openstack-packstack
+      state: latest
+
   - name: create answer file
     shell: |
       packstack --dry-run --allinone --default-password='{{ password }}' --provision-demo=n --gen-answer-file=/root/answer.txt
