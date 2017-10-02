@@ -66,16 +66,12 @@ resources:
   config_simple_web:
     type: OS::Heat::SoftwareConfig
     properties:
-      config:
-        str_replace:
-          params:
-            $_PORT: { get_param: app_port }
-          template: |
-            #!/bin/bash
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            hostname > /var/www/html/index.html
+      config: |
+        #!/bin/bash
+        yum install -y httpd
+        systemctl start httpd
+        systemctl enable httpd
+        hostname > /var/www/html/index.html
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
