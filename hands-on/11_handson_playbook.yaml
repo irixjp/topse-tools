@@ -3,6 +3,7 @@
   gather_facts: yes
   max_fail_percentage: 0
   vars:
+    password: password
     cc_host: 192.168.199.200
     nw_host: 192.168.199.200
     com_hosts: 192.168.199.201,192.168.199.202
