@@ -122,12 +122,14 @@
     shell: usermod -s /bin/bash nova
 
   - name: copy ssh_config
-    copy:
-      src: utils/ssh_config
-      dest: /var/lib/nova/.ssh/config
-      owner: nova
-      group: nova
-      mode: 0644
+    shell: |
+      cat << EOF >> /var/lib/nova/.ssh/config
+      Host *
+          StrictHostKeyChecking no
+          UserKnownHostsFile=/dev/null
+      EOF
+      chmod 0644 /var/lib/nova/.ssh/config
+      chown nova:nova /var/lib/nova/.ssh/config
 
 - name: allow login to nova user
   hosts: all
