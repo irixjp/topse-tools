@@ -17,13 +17,17 @@ parameters:
     - custom_constraint: glance.image
   private_network:
     type: string
-    default: work-net
+    default: heat-handson-net
     description: Network used by the servers
     constraints:
     - custom_constraint: neutron.network
+  sec_group:
+    type: string
+    description: Security Group used by the server
+    default: sg-for-heat
   key:
     type: string
-    default: key-for-console
+    default: heat-key
   cluster_size:
     type: string
     default: 3
@@ -38,26 +42,16 @@ resources:
     properties:
       count: { get_param: cluster_size }
       resource_def:
-        type: 13_option_single_server.yaml
+        type: 13_option1_single_server.yaml
         properties:
           image: { get_param: image }
           key: { get_param: key }
           flavor: { get_param: flavor }
           private_network: { get_param: private_network }
-          private_subnet: { get_param: private_subnet }
-          sec_group: { get_resource: sec_group }
-          app_port: { get_param: app_port }
-          pool: { get_resource: pool }
+          sec_group: { get_param: sec_group }
           reposerver: { get_param: reposerver }
 
 outputs:
-  lburl:
-    value:
-      str_replace:
-        template: http://IP_ADDRESS:PORT
-        params:
-          IP_ADDRESS: { get_attr: [ floating_ip, floating_ip_address ] }
-          PORT: { get_param: lb_port }
-    description: >
-      This URL is the "external" URL that can be used to access the
-      load balancer.
+  instance_ips:
+    description: The IP address of the deployed instance
+    value: { get_attr: [ web_cluster, server_ip ] }
