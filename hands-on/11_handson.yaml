@@ -212,6 +212,8 @@ resources:
     properties:
       config: |
         #!/bin/bash -ex
+        yum install -y openstack-packstack
+
         echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
         modprobe -r kvm_intel
         modprobe kvm_intel
