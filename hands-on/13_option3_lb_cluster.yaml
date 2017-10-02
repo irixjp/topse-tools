@@ -3,6 +3,10 @@ heat_template_version: 2015-10-15
 description: A Group of Load Balanced Servers
 
 parameters:
+  lb_port:
+    type: number
+    default: 80
+    description: Port used by the load balancer
   app_port:
     type: number
     default: 80
@@ -19,19 +23,15 @@ parameters:
     description: Image used for servers
     constraints:
     - custom_constraint: glance.image
-  lb_port:
-    type: number
-    default: 80
-    description: Port used by the load balancer
   private_network:
     type: string
-    default: work-net
+    default: heat-handson-net
     description: Network used by the servers
     constraints:
     - custom_constraint: neutron.network
   private_subnet:
     type: string
-    default: work-subnet
+    default: heat-handson-subnet
     description: Subnet on which the load balancer will be located
     constraints:
     - custom_constraint: neutron.subnet
@@ -43,7 +43,7 @@ parameters:
     - custom_constraint: neutron.network
   key:
     type: string
-    default: key-for-console
+    default: heat-key
   cluster_size:
     type: string
     default: 3
@@ -71,7 +71,7 @@ resources:
     properties:
       count: { get_param: cluster_size }
       resource_def:
-        type: 13_option_single_server.yaml
+        type: 13_option3_single_server.yaml
         properties:
           image: { get_param: image }
           key: { get_param: key }
