@@ -6,27 +6,23 @@ parameters:
   image:
     type: string
     description: Image used for servers
+    default: CentOS7
   key:
     type: string
     description: SSH key to connect to the servers
+    default: heat-key
   flavor:
     type: string
     description: flavor used by the servers
+    default: m1.tiny
   private_network:
     type: string
     description: Network used by the server
-  private_subnet:
-    type: string
-    description: Sub-network used by the server
+    default: heat-handson-net
   sec_group:
     type: string
     description: Security Group used by the server
-  app_port:
-    type: string
-    description: Number of web app port
-  pool:
-    type: string
-    description: Pool to contact
+    default: sg-for-heat
   reposerver:
     type: string
     description: Teahcer will give the specific ip address.
@@ -78,6 +74,7 @@ resources:
             #!/bin/bash
             yum install -y httpd
             systemctl start httpd
+            systemctl enable httpd
             hostname > /var/www/html/index.html
 
   config_send_notify_after_settings:
@@ -113,18 +110,7 @@ resources:
       security_groups:
         - { get_param: sec_group }
 
-  member:
-    type: OS::Neutron::LBaaS::PoolMember
-    properties:
-      pool: { get_param: pool }
-      address: { get_attr: [ server, first_address ] }
-      protocol_port: { get_param: app_port }
-      subnet: { get_param: private_subnet }
-
 outputs:
   server_ip:
     description: IP Address of the load-balanced server.
     value: { get_attr: [ server, first_address ] }
-  lb_member:
-    description: LB member details.
-    value: { get_attr: [ member, show ] }
