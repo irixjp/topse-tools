@@ -104,7 +104,7 @@
       openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
       openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
       openstack-config --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32
-      openstack-config --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 5
+      openstack-config --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 1.5
       openstack-config --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 3
       openstack-config --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
     args:
