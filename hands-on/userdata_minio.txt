@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Install minio
+mkdir -p /opt/{minio/bin,minio/data}
+curl -o /opt/minio/bin/minio https://dl.minio.io/server/minio/release/linux-amd64/minio
+chmod +x /opt/minio/bin/minio
+
+# Get endpoint from metadata
+ENDPOINT=`curl 169.254.169.254/latest/meta-data/local-ipv4`
+
+# Run minio server
+/opt/minio/bin/minio server --address ${ENDPOINT}:9000 /opt/minio/data >> /var/log/minio.log 2>&1
+
