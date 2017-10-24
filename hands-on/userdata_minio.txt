@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 
 # Install minio
 mkdir -p /opt/{minio/bin,minio/data}
