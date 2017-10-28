@@ -31,7 +31,7 @@ def main():
         delete_servers(a, s)
         sys.exit()
     else:
-        print("There is only consle instance.")
+        print("There is only console instance.")
         sys.exit()
 
 
