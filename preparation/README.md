@@ -113,10 +113,20 @@ docker stop repo; docker start repo
 
 ### 各ノードのSSHD設定
 
+リポジトリサーバから各 OpenStack ホストに ssh できるようにする。リポジトリサーバで実行。
+
 ```
-ansible openstack-all -f 10 -i production -u sysuser -s -m ping
-ansible openstack-all -i production -u sysuser -s -m shell -a 'cat /home/sysuser/.ssh/authorized_keys > /root/.ssh/authorized_keys'
-ansible openstack-all -i production -u sysuser -s -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd"
+ssh-keygen -t rsa
+```
+
+`~/.ssh/id_rsa.pub`の内容を 各 OpenStack ホストの`~/.ssh/authorized_keys`に追記する。
+
+リポジトリサーバから各 OpenStack ホストに root で ssh ログインできるように設定する。
+
+```
+ansible openstack-all -f 10 -i production -u sysuser -b -K -m ping
+ansible openstack-all -i production -u sysuser -b -K -m shell -a 'cat /home/sysuser/.ssh/authorized_keys > /root/.ssh/authorized_keys'
+ansible openstack-all -i production -u sysuser -b -K -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd"
 ansible openstack-all -f 10 -i production -u root -m ping
 
 ansible openstack-all -i production -u root -m shell -a 'top -b -n 1 | grep kipmi'
