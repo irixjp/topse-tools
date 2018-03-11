@@ -17,8 +17,10 @@ reboot
 yum install -y epel-release
 yum install -y qemu-kvm libvirt virt-manager virt-install \
                libguestfs libguestfs-tools \
-               docker \
+               yum-utils device-mapper-persistent-data lvm2 \
                screen tmux jq ansible git
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install -y docker-ce
 ```
 
 ### ディレクトリの設定
@@ -33,6 +35,8 @@ ln -s /mnt/images /var/lib/libvirt/images
 ```
 
 ### 300GBのイメージまで作れるようにする（デフォ10GB）
+
+現在 (20180311) 最新の Docker CE では、overlayfs2 がデフォルトで使用されるため以下の設定は不要のはず。
 
 ```
 vi /etc/sysconfig/docker-storage
