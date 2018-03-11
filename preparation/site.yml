@@ -1,7 +1,7 @@
 ---
-- include: 01_pre_connection_test.yml
-- include: 02_requirements_setup.yml
-- include: 03_reboot.yml
-- include: 04_test_requiremetns.yml
-- include: 05_packstack.yml
-- include: 06_reboot.yml
+#- import_playbook: 01_pre_connection_test.yml
+- import_playbook: 02_requirements_setup.yml
+- import_playbook: 03_reboot.yml
+- import_playbook: 04_test_requiremetns.yml
+- import_playbook: 05_packstack.yml
+- import_playbook: 06_reboot.yml
