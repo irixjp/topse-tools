@@ -140,4 +140,8 @@ ansible openstack-all -i production -u root -m shell -a 'echo 100 > /sys/module/
 
 使い方
 ------------
+リポジトリサーバで root ユーザで以下のコマンドを実行する。
 
+```
+ansible-playbook -i production site.yml
+```
