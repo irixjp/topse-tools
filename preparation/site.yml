@@ -1,5 +1,5 @@
 ---
-#- import_playbook: 01_pre_connection_test.yml
+- import_playbook: 01_pre_connection_test.yml
 - import_playbook: 02_requirements_setup.yml
 - import_playbook: 03_reboot.yml
 - import_playbook: 04_test_requiremetns.yml
