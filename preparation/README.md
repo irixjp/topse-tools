@@ -27,6 +27,8 @@ tmpfs            13G     0   13G   0% /run/user/1000
 準備 - テスト環境の構築(リポジトリサーバー)
 ------------
 
+全て `root` で実施
+
 ### 最新課・必要パッケージのインストール
 
 ```
@@ -102,43 +104,80 @@ docker stop repo; docker start repo
 リポジトリサーバから各 OpenStack ホストに ssh できるようにする。
 
 ```
-# sysuser ユーザで実行
-ssh-keygen -t rsa
-
-# root ユーザで実行
-ssh-keygen -t rsa
+ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
+cat ~/.ssh/id_rsa.pub
 ```
 
-sysuser / root 2つのユーザの各`~/.ssh/id_rsa.pub`の内容を 両方共各 OpenStack ホストの`~/.ssh/authorized_keys`に追記する。
-
-リポジトリサーバから各 OpenStack ホストに root で ssh ログインできるように設定する。
+上記の公開鍵を全OpenStackノードのログインユーザーの`~/.ssh/authorized_keys`に追記する。
 
 ```
-ansible openstack-all -f 10 -i production -u sysuser -b -K -m ping
-ansible openstack-all -i production -u sysuser -b -K -m shell -a 'cat /home/sysuser/.ssh/authorized_keys >> /root/.ssh/authorized_keys'
-ansible openstack-all -i production -u sysuser -b -K -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd"
-ansible openstack-all -f 10 -i production -u root -m ping
+cd /mnt/topse-tools/preparation/
 
-ansible openstack-all -i production -u root -m shell -a 'top -b -n 1 | grep kipmi'
+# 接続確認
+ansible openstack-all -f 10 -u centos -b -m ping
 
-ansible openstack-all -i production -u root -m shell -a 'echo 100 > /sys/module/ipmi_si/parameters/kipmid_max_busy_us'
+# root の authorized_key にコピー
+ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys >> /root/.ssh/authorized_keys'
+
+# root ログインを有効化
+ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd"
+
+# root での接続テスト
+ansible openstack-all -f 10 -u root -m ping
 ```
+
+
+kipmi が CPU100%になる場合のワークアラウンド
+```
+# プロセスの確認
+ansible openstack-all -u root -m shell -a 'top -b -n 1 | grep kipmi'
+
+# もし100%だったら実行
+ansible openstack-all -u root -m shell -a 'echo 100 > /sys/module/ipmi_si/parameters/kipmid_max_busy_us'
+```
+
 
 OpenStackのデプロイ
 ------------
-リポジトリサーバで root ユーザで以下のコマンドを実行する。
+リポジトリサーバーから `root` で作業する。
+
+### 事前の確認
+
+- リポジトリサーバーのIPアドレス → `group_vars/all`
+- OpenStack に設定する admin パスワード → `group_vars/all`
+- OpenStackノードのIPアドレス → `production`
+- NIC の名前 → `group_vars/production`
+- コントローラーのIPアドレス → `utils/ifcfg-br-ex-eno2.cfg.j2`
+
+
+### 構築の実行
 
 ```
-ansible-playbook -i production site.yml
+cd /mnt/topse-tools/preparation/
+ansible-playbook site.yml
 ```
 
-構築したOpenStack環境の確認
+もし個別のステップを実行する場合には以下のようにする。
+```
+ansible-playbook 01_pre_connection_test.yml
+ansible-playbook 02_requirements_setup.yml
+ansible-playbook 03_reboot.yml
+ansible-playbook 04_test_requiremetns.yml
+ansible-playbook 05_packstack.yml
+ansible-playbook 06_reboot.yml
+```
+
+yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
+
+
+
+構築したOpenStack環境の基礎設定
 ------------
 
-コントローラノードにログインして以下を実施。
+コントローラノードにログインして以下を実施。エラーがなければOK。
 
 ```
-sudo su -
+sudo -i
 cd ~/
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
@@ -151,11 +190,14 @@ source keystonerc_admin
 
 nova service-list
 cinder service-list
-#heat service-list
 openstack orchestration service list
 neutron agent-list
+```
 
-cd ~/topse-tools/preparation/test/
+`topse-tools/preparation/utils/heat/heat_basic_setting.yaml` で Floating IPのレンジを設定しておく。
+
+```
+cd ~/topse-tools/preparation/utils/heat
 heat stack-create --poll -f 07_heat_basic_setting.yaml default
 
 openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 --ports 300 topse01

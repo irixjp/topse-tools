@@ -21,8 +21,8 @@ resources:
     properties:
       name: public-subnet
       allocation_pools:
-        - start: 157.1.141.101
-          end: 157.1.141.250
+        - start: 157.1.141.20
+          end: 157.1.141.30
       cidr: 157.1.140.0/23
       enable_dhcp: False
       gateway_ip: 157.1.140.1
