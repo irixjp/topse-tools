@@ -1,7 +1,0 @@
----
-# tasks file for roles/common
-- name: ping
-  ping:
-
-- name: get variables
-  debug: var=hostvars[inventory_hostname]

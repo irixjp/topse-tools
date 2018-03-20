@@ -73,38 +73,6 @@
 #        - "'net.ipv4.conf.all.rp_filter = 0' in ret.stdout_lines[1]"
 #        - "'net.ipv4.conf.default.rp_filter = 0' in ret.stdout_lines[2]"
 
-  - name: mount point for nova
-    shell: |
-      mount | grep /var/lib/nova
-    register: ret
-  - assert:
-      that:
-        - "ret.rc == 0"
-
-  - name: mount point for glance
-    shell: |
-      mount | grep /var/lib/glance
-    register: ret
-  - assert:
-      that:
-        - "ret.rc == 0"
-
-  - name: mount point for cinder
-    shell: |
-      mount | grep /var/lib/cinder
-    register: ret
-  - assert:
-      that:
-        - "ret.rc == 0"
-
-  - name: mount point for swift
-    shell: |
-      mount | grep /srv
-    register: ret
-  - assert:
-      that:
-        - "ret.rc == 0"
-
   - name: ssh connection test each nodes
     shell:
       ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@{{ item }} hostname

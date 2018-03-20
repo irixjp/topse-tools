@@ -54,26 +54,6 @@
       group=root
       mode=0644
 
-  - name: create dirs
-    shell: |
-      mkdir -p /mnt/{nova,glance,cinder,swift}
-      mkdir -p /var/lib/{nova,glance,cinder}
-      mkdir -p /srv
-
-  - name: add mount points
-    lineinfile: >
-      dest=/etc/fstab
-      line='/mnt/{{ item }}    /var/lib/{{ item }}    none  bind   0 0'
-    with_items:
-      - nova
-      - glance
-      - cinder
-
-  - name: add mount point swift
-    lineinfile: >
-      dest=/etc/fstab
-      line='/mnt/swift   /srv             none  bind   0 0'
-
   - name: put private ssh key
     copy:
       src: utils/ansible_key

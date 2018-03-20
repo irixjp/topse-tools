@@ -1,19 +1,36 @@
 TOPSE「クラウド基盤構築演習」環境構築方法
 =========
 
+研究クラウド側のイメージ
+------------
+
+`centos7-image_20170519` を使用してベアメタルインスタンス `c20.m128.d1500` を起動する。
+
+利用するサーバーの種類
+
+- リポジトリ・演習素材配布サーバー 1台
+- コントローラー 1台
+- コンピュート N台
+
+```
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2       1.4T  1.2G  1.4T   1% /           ← データは全部ここにいれておく
+devtmpfs         63G     0   63G   0% /dev
+tmpfs            63G     0   63G   0% /dev/shm
+tmpfs            63G   18M   63G   1% /run
+tmpfs            63G     0   63G   0% /sys/fs/cgroup
+/dev/sda3       362G   33M  362G   1% /mnt
+tmpfs            13G     0   13G   0% /run/user/1000
+```
+
+
 準備 - テスト環境の構築(リポジトリサーバー)
 ------------
 
-### 最新化
+### 最新課・必要パッケージのインストール
 
 ```
 yum update -y
-reboot
-```
-
-### 必要パッケージのインストール
-
-```
 yum install -y epel-release
 yum install -y qemu-kvm libvirt virt-manager virt-install \
                libguestfs libguestfs-tools \
@@ -21,26 +38,6 @@ yum install -y qemu-kvm libvirt virt-manager virt-install \
                screen tmux jq ansible git
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 yum install -y docker-ce
-```
-
-### ディレクトリの設定
-
-```
-mv /var/lib/docker /mnt
-ln -s /mnt/docker /var/lib/docker
-rm -Rf /var/lib/docker/*
-
-mv /var/lib/libvirt/images /mnt
-ln -s /mnt/images /var/lib/libvirt/images
-```
-
-### 300GBのイメージまで作れるようにする（デフォ10GB）
-
-現在 (20180311) 最新の Docker CE では、overlayfs2 がデフォルトで使用されるため以下の設定は不要のはず。
-
-```
-vi /etc/sysconfig/docker-storage
-DOCKER_STORAGE_OPTIONS="-g /mnt/docker --storage-opt=dm.basesize=300G"
 ```
 
 ### Nested KVMの有効化
@@ -75,20 +72,10 @@ git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 mkdir -p /mnt/dvd
 ```
 
-### テスト用仮想ネットワークの作成
-
-```
-cd topse-tools/preparation/utils
-bash ./create_virtual_network.sh
-virsh net-define ./virbr100.xml
-virsh net-start virbr100
-virsh net-autostart virbr100
-```
-
 ### 認証キーの作成
 
 ```
-cd topse-tools/preparation/utils
+cd preparation/utils
 rm -f ansible*
 ssh-keygen -f ansible_key -P '' -t rsa
 ```
@@ -96,13 +83,12 @@ ssh-keygen -f ansible_key -P '' -t rsa
 ### リポジトリコンテナの起動
 
 ```
-docker pull irixjp/topse-cloud-repo:newton-v1.0
 docker run -d -p 80:80 \
        --name repo \
        -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
        -v /mnt/topse-tools/preparation:/var/www/html/preparation \
        -v /mnt/dvd:/var/www/html/dvd \
-       irixjp/topse-cloud-repo:newton-v1.0
+       irixjp/topse-cloud-repo:newton-v2.0
 
 cd /mnt
 curl -O localhost/images/Cent7-Mini.iso
