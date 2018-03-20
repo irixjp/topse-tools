@@ -26,7 +26,7 @@ ssh -o "StrictHostKeyChecking=no" root@192.168.100.100 -i /mnt/topse-tools/prepa
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2017-02
+BRANCH_NAME=2018-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 cd ~/
@@ -62,12 +62,12 @@ glance --os-image-api-version 1 image-create \
 --is-public True --is-protected True \
 --progress
 
-glance --os-image-api-version 1 image-create \
---name "Docker" \
---disk-format qcow2 --container-format bare \
---copy-from http://reposerver/images/Docker.qcow2 \
---is-public True --is-protected True \
---progress
+#glance --os-image-api-version 1 image-create \
+#--name "Docker" \
+#--disk-format qcow2 --container-format bare \
+#--copy-from http://reposerver/images/Docker.qcow2 \
+#--is-public True --is-protected True \
+#--progress
 
 openstack image list
 ```
@@ -75,7 +75,7 @@ openstack image list
 リソース作成テスト1
 ```
 source openrc_teacher01
-heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.21" test_console
+heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.26" test_console
 
 CONSOLE=`heat output-show test_console console | python -c "import json,sys; print json.load(sys.stdin).get('floating_ip')"`; echo $CONSOLE
 
