@@ -13,7 +13,7 @@ resources:
     properties:
       name: public
       network_type: flat
-      physical_network: extnet1
+      physical_network: physnet1
       router_external: True
 
   public-subnet:
