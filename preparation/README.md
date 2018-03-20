@@ -138,10 +138,89 @@ ansible openstack-all -i production -u root -m shell -a 'top -b -n 1 | grep kipm
 ansible openstack-all -i production -u root -m shell -a 'echo 100 > /sys/module/ipmi_si/parameters/kipmid_max_busy_us'
 ```
 
-使い方
+OpenStackのデプロイ
 ------------
 リポジトリサーバで root ユーザで以下のコマンドを実行する。
 
 ```
 ansible-playbook -i production site.yml
+```
+
+構築したOpenStack環境の確認
+------------
+
+コントローラノードにログインして以下を実施。
+
+```
+sudo su -
+cd ~/
+git clone https://github.com/irixjp/topse-tools.git
+cd topse-tools/
+
+BRANCH_NAME=2018-01
+git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+
+cd ~/
+source keystonerc_admin
+
+nova service-list
+cinder service-list
+#heat service-list
+openstack orchestration service list
+neutron agent-list
+
+cd ~/topse-tools/preparation/test/
+heat stack-create --poll -f 07_heat_basic_setting.yaml default
+
+openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 --ports 300 topse01
+openstack quota set --instances 5 --floating-ips 2 --ram 40960 --volumes 10 --gigabytes 10 --cores 20 topse02
+
+nova flavor-delete 1
+nova flavor-delete 2
+nova flavor-delete 3
+nova flavor-delete 4
+nova flavor-delete 5
+
+nova flavor-create m1.tiny   100 1024 10  1
+nova flavor-create m1.small  101 2048 10  1
+nova flavor-create m1.medium 102 4096 20  1
+nova flavor-create m1.large  103 8192 100 2
+nova flavor-create m1.xlarge 104 8192 200 4
+
+glance --os-image-api-version 1 image-create \
+--name "CentOS7" \
+--disk-format qcow2 --container-format bare \
+--copy-from http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2 \
+--is-public True --is-protected True \
+--progress
+
+#glance --os-image-api-version 1 image-create \
+#--name "Docker" \
+#--disk-format qcow2 --container-format bare \
+#--copy-from http://reposerver/images/Docker.qcow2 \
+#--is-public True --is-protected True \
+#--progress
+
+openstack image list
+```
+
+リソース作成テスト1
+
+```
+source openrc_teacher01
+heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.26" test_console
+
+CONSOLE=`heat output-show test_console console | python -c "import json,sys; print json.load(sys.stdin).get('floating_ip')"`; echo $CONSOLE
+
+ssh centos@${CONSOLE}
+
+git clone https://github.com/irixjp/topse-tools.git
+cd topse-tools/
+
+BRANCH_NAME=2017-02
+git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+
+cd preparation/test/
+source openrc_teacher01
+source ../../hands-on/support.sh
 ```

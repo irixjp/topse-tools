@@ -1,7 +1,7 @@
 export OS_TENANT_NAME=topse01
 export OS_USERNAME=teacher01
 export OS_PASSWORD=^topse2017$
-export OS_AUTH_URL=http://192.168.100.100:5000/v3
+export OS_AUTH_URL=http://157.1.141.28:5000/v3
 export OS_REGION_NAME=RegionOne
 export OS_VOLUME_API_VERSION=2
 export OS_IDENTITY_API_VERSION=3
