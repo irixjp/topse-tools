@@ -110,6 +110,8 @@ cat ~/.ssh/id_rsa.pub
 
 上記の公開鍵を全OpenStackノードのログインユーザーの`~/.ssh/authorized_keys`に追記する。
 
+以下はユーザー `centos` の例（一般ユーザーは何でも良い）
+
 ```
 cd /mnt/topse-tools/preparation/
 
@@ -124,6 +126,12 @@ ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no
 
 # root での接続テスト
 ansible openstack-all -f 10 -u root -m ping
+```
+
+Gen3でのネットワーク対応。cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
+
+```
+rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh
 ```
 
 
@@ -174,7 +182,9 @@ yum update 後にリブートすると、起動後に5分程度重い処理が�
 構築したOpenStack環境の基礎設定
 ------------
 
-コントローラノードにログインして以下を実施。エラーがなければOK。
+コントローラノードにログインして以下を実施。
+
+### 状態の確認（エラーがなければOK）
 
 ```
 sudo -i
@@ -194,12 +204,18 @@ openstack orchestration service list
 neutron agent-list
 ```
 
-`topse-tools/preparation/utils/heat/heat_basic_setting.yaml` で Floating IPのレンジを設定しておく。
+### 基本設定の投入
+
+`topse-tools/preparation/utils/heat/heat_basic_setting.yaml` で Floating IPのレンジをとパスワードを設定しておく。
 
 ```
 cd ~/topse-tools/preparation/utils/heat
-heat stack-create --poll -f 07_heat_basic_setting.yaml default
+heat stack-create --poll -f heat_basic_setting.yaml default
+```
 
+### クォータ、フレーバー、イメージの設定
+
+```
 openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 --ports 300 topse01
 openstack quota set --instances 5 --floating-ips 2 --ram 40960 --volumes 10 --gigabytes 10 --cores 20 topse02
 
@@ -232,12 +248,27 @@ glance --os-image-api-version 1 image-create \
 openstack image list
 ```
 
-リソース作成テスト1
+
+環境のテスト
+------------
+
+### リソース作成テスト1
+
+- 作成したコンソールサーバーへログインできればOK。
+
+`openrc_teacher01` `openrc_teacher02` のエンドポイント、パスワードを設定しておく。
+
+テストを実行するコンソールサーバーを起動する。
 
 ```
+cd ~/topse-tools/preparation/utils/heat
 source openrc_teacher01
-heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.26" test_console
+heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.22" test_console
+```
 
+コンソールにログインしてテストの実施準備。パスワードは上記で設定した値。
+
+```
 CONSOLE=`heat output-show test_console console | python -c "import json,sys; print json.load(sys.stdin).get('floating_ip')"`; echo $CONSOLE
 
 ssh centos@${CONSOLE}
@@ -245,10 +276,142 @@ ssh centos@${CONSOLE}
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2017-02
+BRANCH_NAME=2018-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
-
-cd preparation/test/
-source openrc_teacher01
-source ../../hands-on/support.sh
 ```
+
+`openrc_teacher01` のエンドポイントとパスワードを設定しておく。
+
+```
+cd preparation/utils/heat/
+source openrc_teacher01
+source ../../../hands-on/support.sh
+```
+
+### リソース作成テスト2
+
+全フレーバーで全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。
+
+- 全コンピュートに分散するか？
+- オーバーコミットが正しく設定されているか？
+- 全台起動できているか？(CLUSTER x 5 台起動するはず)
+
+```
+CLUSTER=5
+heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.tiny" test_massive1
+heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.small" test_massive2
+heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.medium" test_massive3
+heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.large" test_massive4
+heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.xlarge" test_massive5
+
+nova list
+nova list | grep test_massive | wc -l
+nova-manage vm list
+
+heat stack-delete -y test_massive1
+heat stack-delete -y test_massive2
+heat stack-delete -y test_massive3
+heat stack-delete -y test_massive4
+heat stack-delete -y test_massive5
+```
+
+### リソース作成テスト3
+
+Heat, LBaaS が正常に稼働しているか確認。
+
+- curl している部分でラウンドロビンされたトップページが表示されればOK
+- Cluster Size を変更してもちゃんとオートスケールされることを確認する（前に UPDATE\_IN\_PROGRESS のまま進まないときがあった）
+
+```
+repo=`get_reposerver`; echo $repo
+heat stack-create --poll -f test_cluster.yaml -P "reposerver=${repo}" test_cluster
+
+URL=`get_heat_output test_cluster lburl`; echo $URL
+for i in `seq 1 20`; do curl $URL; sleep 1; done
+
+heat stack-update -f test_cluster.yaml -P "reposerver=${repo}" -P cluster_size=6 test_cluster
+heat stack-list
+for i in `seq 1 60`; do curl $URL; sleep 2; done
+
+heat stack-delete -y test_cluster
+```
+
+### リソース作成テスト4
+
+スタックのアップグレードでフレーバーの変更ができるか確認。`allow_resize_to_same_host` と Migration 設定がうまく行っていないと RESIZE時に UPDATE\_IN\_PROGRESS のまま失敗する。
+
+参考にしたページ：https://qiita.com/kentarosasaki/items/9c0b6c9200bf424311f9
+
+- フレーバーの変更ができればOK。
+
+```
+heat stack-create -f test_simple_server.yaml -P "flavor=m1.tiny" test_update_stack
+nova list; heat stack-list
+
+heat stack-update -f test_simple_server.yaml -P "flavor=m1.small" test_update_stack
+nova list; heat stack-list
+
+heat stack-update -f test_simple_server.yaml -P "flavor=m1.medium" test_update_stack
+nova list; heat stack-list
+
+heat stack-update -f test_simple_server.yaml -P "flavor=m1.large" test_update_stack
+nova list; heat stack-list
+
+heat stack-update -f test_simple_server.yaml -P "flavor=m1.xlarge" test_update_stack
+nova list; heat stack-list
+
+heat stack-delete -y test_update_stack
+```
+
+### 環境の削除
+
+ここまでのテストがOKだとほぼ環境は正常に動いているはず。
+
+```
+exit
+heat stack-delete -y test_console
+```
+
+
+環境環境の整備
+------------
+
+コントローラーで作業。演習に必要な環境を作成しておく。
+
+```
+unset OS_TENANT_NAME
+unset OS_USERNAME
+unset OS_PASSWORD
+unset OS_AUTH_URL
+unset OS_REGION_NAME
+unset OS_VOLUME_API_VERSION
+unset OS_IDENTITY_API_VERSION
+unset OS_USER_DOMAIN_NAME
+unset OS_PROJECT_DOMAIN_NAME
+
+cd ~/topse-tools/preparation/
+source ~/keystonerc_admin
+nova list --all
+```
+
+### テスト用の生徒アカウントを作成
+
+演習が正しく実施できるかは、このユーザーで確かめる。
+
+```
+bash ./07_add_test_student.sh
+```
+
+### Docker イメージの作成
+
+古いDockerイメージがある場合には削除しておく。
+
+```
+openstack image list
+```
+
+```
+cd ~/topse-tools/preparation/utils/heat
+heat stack-create --poll -f docker_image_create.yaml -P "password=password" -P "reposerver=157.1.141.22" docker-image-build
+```
+

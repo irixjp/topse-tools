@@ -89,7 +89,7 @@
   - name: modify eth0
     template: >-
       src=utils/ifcfg-{{ tunn_nic }}.cfg.j2
-      dest=/etc/sysconfig/network-scripts/ifcfg-{{ tunn_nic }}.cfg
+      dest=/etc/sysconfig/network-scripts/ifcfg-{{ tunn_nic }}
       owner=root
       group=root
       mode=0644
@@ -99,7 +99,7 @@
   - name: modify br-ex
     template: >-
       src=utils/ifcfg-br-ex-{{ tunn_nic }}.cfg.j2
-      dest=/etc/sysconfig/network-scripts/ifcfg-br-ex.cfg
+      dest=/etc/sysconfig/network-scripts/ifcfg-br-ex
       owner=root
       group=root
       mode=0644

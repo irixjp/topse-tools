@@ -1,6 +1,6 @@
 heat_template_version: 2015-04-30
 
-description: Setup default handson environment.
+description: Creating Docker image
 
 parameters:
   reposerver:
@@ -129,37 +129,23 @@ resources:
           template: |
             #!/bin/bash -ex
             yum install -y \
-            python2-novaclient \
-            python2-cinderclient \
-            python2-keystoneclient \
-            python2-neutronclient \
-            python2-glanceclient \
-            python2-swiftclient \
-            python2-heatclient \
-            python-openstackclient \
-            jq \
-            wget \
-            vim \
-            crudini \
-            bash-completion \
-            ansible \
-            lynx \
-            plotnetcfg \
-            graphviz \
-            httpd \
+            docker \
             git
 
-            systemctl enable httpd
-            systemctl start httpd
+            systemctl enable docker
+            systemctl start docker
+
+            docker pull jenkins
+            docker pull redmine
+            docker pull centos:6
+            docker pull centos:7
+            docker pull enakai00/eplite:ver1.0
+            docker pull enakai00/epmysql:ver1.0
+            docker pull minio/minio
+            docker images
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
-            echo "$_private_key_" > /home/centos/.ssh/id_rsa
-            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
-            chown centos:centos /home/centos/.ssh/id_rsa
-            chown centos:centos /home/centos/.ssh/id_rsa.pub
-            chmod 600 /home/centos/.ssh/id_rsa
-            chmod 644 /home/centos/.ssh/id_rsa.pub
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
@@ -171,6 +157,7 @@ resources:
           template: |
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            shutdown -h now
 
   server_init:
     type: OS::Heat::MultipartMime
