@@ -399,7 +399,10 @@ nova list --all
 演習が正しく実施できるかは、このユーザーで確かめる。
 
 ```
-bash ./07_add_test_student.sh
+bash ./10_add_test_student.sh
+
+openstack project list
+openstack user list
 ```
 
 ### Docker イメージの作成
@@ -408,12 +411,121 @@ bash ./07_add_test_student.sh
 
 ```
 openstack image list
+openstack image delete Docker
 ```
+
+起動すると yum update と 基本パッケージのインストールがおこなわれ最後にリブートされる。
 
 ```
 cd ~/topse-tools/preparation/utils/heat
 heat stack-create --poll -f build_docker_image.yaml -P "password=password" -P "reposerver=157.1.141.22" docker-image-build
 
+nova list
 nova console-log docker-image-build
+
+CONSOLE=`heat output-show docker-image-build console | python -c "import json,sys; print json.load(sys.stdin).get('floating_ip')"`; echo $CONSOLE
+
+ssh centos@${CONSOLE}
 ```
+
+必要なイメージやパッケージがあればインストールする。
+
+```
+sudo -i
+docker ps -a
+
+docker pull jenkins
+docker pull redmine
+docker pull centos:6
+docker pull centos:7
+docker pull enakai00/eplite:ver1.0
+docker pull enakai00/epmysql:ver1.0
+docker pull minio/minio
+
+docker images
+
+shutdown -h now
+```
+
+インスタンスが停止したらイメージ化しておく。
+
+```
+nova list
+nova image-create docker-image-build Docker
+
+openstack image list
+openstack image set --protected --public Docker
+```
+
+環境の削除
+
+```
+heat stack-delete -y docker-image-build
+```
+
+### Etherpad の準備
+
+teacher02 アカウントで作成する。
+
+`openrc_teacher02` のエンドポイントとパスワードを設定しておく。
+
+```
+cd ~/topse-tools/preparation/utils/heat
+source openrc_teacher02
+
+heat stack-create --poll -f setup_tools_env.yaml tools-env
+heat stack-create --poll -f etherpad.yaml -P "reposerver=157.1.141.22" etherpad
+
+nova console-log --length 100 etherpad
+heat output-show etherpad floating_ip
+```
+
+上記のIPアドレスへ接続してトップページが見えればOK。
+
+
+### 生徒用アカウントの払い出し
+
+```
+unset OS_TENANT_NAME
+unset OS_USERNAME
+unset OS_PASSWORD
+unset OS_AUTH_URL
+unset OS_REGION_NAME
+unset OS_VOLUME_API_VERSION
+unset OS_IDENTITY_API_VERSION
+unset OS_USER_DOMAIN_NAME
+unset OS_PROJECT_DOMAIN_NAME
+
+cd ~/topse-tools
+source ~/keystonerc_admin
+```
+
+元ファイルをコピー
+
+```
+cp 10_add_test_student.sh 20_add_students.sh
+vi 20_add_students.sh
+```
+
+`USERLIST` を編集する。出欠表の学籍番号等。
+
+サンプル
+
+```
+USERLIST='11111
+22222
+33333
+44444'
+```
+
+実行
+
+```
+bash ./20_add_students.sh
+
+openstack project list
+openstack user list
+```
+
+もし、追加でユーザーの作成が必要になった場合には、このファイルをコピーして追加ユーザーを作成する。
 
