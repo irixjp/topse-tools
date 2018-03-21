@@ -412,6 +412,8 @@ openstack image list
 
 ```
 cd ~/topse-tools/preparation/utils/heat
-heat stack-create --poll -f docker_image_create.yaml -P "password=password" -P "reposerver=157.1.141.22" docker-image-build
+heat stack-create --poll -f build_docker_image.yaml -P "password=password" -P "reposerver=157.1.141.22" docker-image-build
+
+nova console-log docker-image-build
 ```
 

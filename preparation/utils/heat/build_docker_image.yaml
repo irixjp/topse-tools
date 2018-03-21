@@ -135,6 +135,10 @@ resources:
             systemctl enable docker
             systemctl start docker
 
+            sleep 10
+            systemctl status docker
+            journalctl -u docker.service
+
             docker pull jenkins
             docker pull redmine
             docker pull centos:6
@@ -157,7 +161,6 @@ resources:
           template: |
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
-            shutdown -h now
 
   server_init:
     type: OS::Heat::MultipartMime
@@ -171,7 +174,7 @@ resources:
   instance:
     type: OS::Nova::Server
     properties:
-      name: console
+      name: docker-image-build
       image: CentOS7
       flavor: m1.tiny
       key_name: { get_resource: key_pair }
