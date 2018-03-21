@@ -131,7 +131,7 @@ ansible openstack-all -f 10 -u root -m ping
 Gen3でのネットワーク対応。cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
 
 ```
-rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh
+ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh'
 ```
 
 
