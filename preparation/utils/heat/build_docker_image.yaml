@@ -128,25 +128,12 @@ resources:
             $_public_key_: { get_attr: [ key_pair, public_key ] }
           template: |
             #!/bin/bash -ex
+            yum update -y
             yum install -y \
             docker \
             git
 
             systemctl enable docker
-            systemctl start docker
-
-            sleep 10
-            systemctl status docker
-            journalctl -u docker.service
-
-            docker pull jenkins
-            docker pull redmine
-            docker pull centos:6
-            docker pull centos:7
-            docker pull enakai00/eplite:ver1.0
-            docker pull enakai00/epmysql:ver1.0
-            docker pull minio/minio
-            docker images
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
@@ -161,6 +148,7 @@ resources:
           template: |
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            reboot
 
   server_init:
     type: OS::Heat::MultipartMime
