@@ -59,16 +59,6 @@ resources:
       count: 1
       timeout: 1800
 
-  wait_handle_after_reboot:
-    type: OS::Heat::WaitConditionHandle
-
-  wait_condition_after_reboot:
-    type: OS::Heat::WaitCondition
-    properties:
-      handle: { get_resource: wait_handle_after_reboot }
-      count: 1
-      timeout: 1800
-
   key_pair:
     type: OS::Nova::KeyPair
     properties:
@@ -131,6 +121,7 @@ resources:
             docker run -itd --name epmysql --expose 3306 enakai00/epmysql:ver1.0
             sleep 10
             docker run -itd --name eplite -p 80:80 -e FIP=wc_external_ip --link epmysql:db enakai00/eplite:ver1.0
+            docker ps -a
             echo "### finish!! ###"
 
   config_send_notify_after_settings:
