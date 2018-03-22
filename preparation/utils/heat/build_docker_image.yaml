@@ -128,11 +128,20 @@ resources:
             $_public_key_: { get_attr: [ key_pair, public_key ] }
           template: |
             #!/bin/bash -ex
+            setenforce 0
+            sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
             yum update -y
             yum install -y \
             docker \
-            git
+            git \
+            python-docker-py \
+            ansible \
+            gcc \
+            python-devel \
+            python-pip \
+            python-heatclient python-openstackclient
 
+            systemctl disable firewalld.service
             systemctl enable docker
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
