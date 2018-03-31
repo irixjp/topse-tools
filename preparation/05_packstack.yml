@@ -21,8 +21,12 @@
       crudini --set /root/answer.txt general CONFIG_HEAT_INSTALL y
 
       crudini --set /root/answer.txt general CONFIG_CONTROLLER_HOST {{ cc_host }}
-      crudini --set /root/answer.txt general CONFIG_NETWORK_HOSTS   {{ nw_host }}
-      crudini --set /root/answer.txt general CONFIG_COMPUTE_HOSTS   {{ com_hosts }}
+      crudini --set /root/answer.txt general CONFIG_NETWORK_HOSTS {{ nw_host }}
+      crudini --set /root/answer.txt general CONFIG_COMPUTE_HOSTS {{ com_hosts }}
+
+      crudini --set /root/answer.txt general CONFIG_STORAGE_HOST {{ cc_host }}
+      crudini --set /root/answer.txt general CONFIG_AMQP_HOST {{ cc_host }}
+      crudini --set /root/answer.txt general CONFIG_MARIADB_HOST {{ cc_host }}
 
       crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
       crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE {{ cinder_size }}
