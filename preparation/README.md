@@ -6,10 +6,12 @@ TOPSE「クラウド基盤構築演習」環境構築方法
 
 `centos7-image_20170519` を使用してベアメタルインスタンス `c20.m128.d1500` を起動する。
 
+* 2018/6/20 に確認したところ、イメージが `centos7-image_20180403` になっていた・・・。
+
 利用するサーバーの種類
 
-- リポジトリ・演習素材配布サーバー 1台
-- コントローラー 1台
+- リポジトリ・演習素材配布サーバー 1台（作業の前半はここで実施）
+- コントローラー 1台（作業の後半はここから実施）
 - コンピュート N台
 
 ```
@@ -24,12 +26,12 @@ tmpfs            13G     0   13G   0% /run/user/1000
 ```
 
 
-準備 - テスト環境の構築(リポジトリサーバー)
+準備 - テスト環境の構築(リポジトリサーバーで実施する)
 ------------
 
 全て `root` で実施
 
-### 最新課・必要パッケージのインストール
+### 最新化・必要パッケージのインストール
 
 ```
 yum update -y
@@ -112,6 +114,9 @@ cat ~/.ssh/id_rsa.pub
 
 以下はユーザー `centos` の例（一般ユーザーは何でも良い）
 
+* 2018.6.20 追記
+演習サーバーの設定が変わったようで、初回のログイン時にパスワードの変更を要求される（空にできない）。同じ状況の場合は、 ansible コマンドに -K をつけて、sudo 時のパスワードを入力する。
+
 ```
 cd /mnt/topse-tools/preparation/
 
@@ -165,11 +170,14 @@ cd /mnt/topse-tools/preparation/
 ansible-playbook site.yml
 ```
 
-もし個別のステップを実行する場合には以下のようにする。
+もし個別のステップを実行する場合には以下のようにする(手間がかかるがこっちがおすすめ
 ```
 ansible-playbook 01_pre_connection_test.yml
 ansible-playbook 02_requirements_setup.yml
 ansible-playbook 03_reboot.yml
+
+ここで少しCPUの様子を見る
+
 ansible-playbook 04_test_requiremetns.yml
 ansible-playbook 05_packstack.yml
 ansible-playbook 06_reboot.yml
