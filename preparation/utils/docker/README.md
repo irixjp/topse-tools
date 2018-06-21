@@ -4,7 +4,7 @@ TOPSE クラウド基盤構築演習用 リポジトリサーバーコンテナ
 # BUILD方法
 
 ```shell
-$ REPO_VERSION=newton-v2.0
+$ REPO_VERSION=queens-latest
 
 $ docker build -t irixjp/topse-cloud-repo:${REPO_VERSION} --no-cache=true --force-rm=true --rm=true .
 ```

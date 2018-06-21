@@ -314,7 +314,7 @@ heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTE
 
 nova list
 nova list | grep test_massive | wc -l
-nova-manage vm list
+nova-manage vm list  # CC で実施する
 
 heat stack-delete -y test_massive1
 heat stack-delete -y test_massive2

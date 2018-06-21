@@ -10,7 +10,7 @@ docker run -d -p 80:80 \
 
 MAINTAINER @irix_jp
 
-RUN yum install -y centos-release-openstack-newton epel-release \
+RUN yum install -y centos-release-openstack-queens epel-release \
     && yum clean all \
     && yum repolist \
     && yum install -y createrepo yum-utils httpd supervisor bash-completion git vim wget \
@@ -21,9 +21,9 @@ RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=base                 
 RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=updates                 --downloadcomps --download-metadata && createrepo -v updates
 RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=extras                  --downloadcomps --download-metadata && createrepo -v extras
 RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=epel                    --downloadcomps --download-metadata && createrepo -v epel    -g comps.xml
-RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=centos-openstack-newton --downloadcomps --download-metadata && createrepo -v centos-openstack-newton
+RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=centos-openstack-queens --downloadcomps --download-metadata && createrepo -v centos-openstack-queens
 RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=centos-qemu-ev          --downloadcomps --download-metadata && createrepo -v centos-qemu-ev
-RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=centos-ceph-jewel       --downloadcomps --download-metadata && createrepo -v centos-ceph-jewel
+RUN cd /var/www/html/repo/centos/7 && reposync -l --repoid=centos-ceph-luminous    --downloadcomps --download-metadata && createrepo -v centos-ceph-luminous
 
 RUN yum clean all
 

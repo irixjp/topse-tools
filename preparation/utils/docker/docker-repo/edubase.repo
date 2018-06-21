@@ -28,14 +28,14 @@ gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7
 
 [openstack]
 name=OpenStack Repository
-baseurl=http://reposerver/repo/centos/7/centos-openstack-newton
+baseurl=http://reposerver/repo/centos/7/centos-openstack-queens
 gpgcheck=0
 enabled=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Cloud
 
 [openstack-storage]
 name=OpenStack Storage Repository
-baseurl=http://reposerver/repo/centos/7/centos-ceph-jewel
+baseurl=http://reposerver/repo/centos/7/centos-ceph-luminous
 gpgcheck=0
 enabled=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Storage
