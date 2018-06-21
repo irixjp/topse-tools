@@ -6,7 +6,7 @@ TOPSE「クラウド基盤構築演習」環境構築方法
 
 `centos7-image_20170519` を使用してベアメタルインスタンス `c20.m128.d1500` を起動する。
 
-* 2018/6/20 に確認したところ、イメージが `centos7-image_20180403` になっていた・・・。
+* 2018/6/20 に確認したところ、イメージが `centos7-image_20180403` になっており、newton が動かない模様。
 
 利用するサーバーの種類
 
@@ -39,7 +39,7 @@ yum install -y epel-release
 yum install -y qemu-kvm libvirt virt-manager virt-install \
                libguestfs libguestfs-tools \
                yum-utils device-mapper-persistent-data lvm2 \
-               screen tmux jq ansible git
+               screen tmux jq ansible git vim tmux
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 yum install -y docker-ce
 ```
@@ -87,12 +87,13 @@ ssh-keygen -f ansible_key -P '' -t rsa
 ### リポジトリコンテナの起動
 
 ```
+IMAGE_VERSION=newton-v2.0
 docker run -d -p 80:80 \
        --name repo \
        -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
        -v /mnt/topse-tools/preparation:/var/www/html/preparation \
        -v /mnt/dvd:/var/www/html/dvd \
-       irixjp/topse-cloud-repo:newton-v2.0
+       irixjp/topse-cloud-repo:${IMAGE_VERSION}
 
 cd /mnt
 curl -O localhost/images/Cent7-Mini.iso
@@ -137,6 +138,13 @@ Gen3でのネットワーク対応。cloud-init が起動のたびにNIC設定�
 
 ```
 ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh'
+```
+
+DNSが eno3 の DHCP に上書きされるので、無効にしておく（eno2 を使う）
+
+```
+ansible openstack-all -u root -m shell -a 'echo PEERDNS=no >> /etc/sysconfig/network-scripts/ifcfg-eno3'
+ansible openstack-all -u root -m shell -a 'cat /etc/sysconfig/network-scripts/ifcfg-eno3'
 ```
 
 
@@ -239,19 +247,12 @@ nova flavor-create m1.medium 102 4096 20  1
 nova flavor-create m1.large  103 8192 100 2
 nova flavor-create m1.xlarge 104 8192 200 4
 
-glance --os-image-api-version 1 image-create \
---name "CentOS7" \
---disk-format qcow2 --container-format bare \
---copy-from http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2 \
---is-public True --is-protected True \
---progress
-
-#glance --os-image-api-version 1 image-create \
-#--name "Docker" \
-#--disk-format qcow2 --container-format bare \
-#--copy-from http://reposerver/images/Docker.qcow2 \
-#--is-public True --is-protected True \
-#--progress
+cd ~/
+curl -o CentOS-7-x86_64-GenericCloud.qcow2 http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2
+openstack image create --disk-format qcow2 --container-format bare \
+                       --file CentOS-7-x86_64-GenericCloud.qcow2 \
+                       --protected --public \
+                       CentOS7
 
 openstack image list
 ```
@@ -271,7 +272,9 @@ openstack image list
 ```
 cd ~/topse-tools/preparation/utils/heat
 source openrc_teacher01
-heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.22" test_console
+nova list
+
+heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.15" test_console
 ```
 
 コンソールにログインしてテストの実施準備。パスワードは上記で設定した値。
@@ -387,7 +390,7 @@ heat stack-delete -y test_console
 コントローラーで作業。演習に必要な環境を作成しておく。
 
 ```
-unset OS_TENANT_NAME
+unset OS_PROJECT_NAME
 unset OS_USERNAME
 unset OS_PASSWORD
 unset OS_AUTH_URL
@@ -426,7 +429,7 @@ openstack image delete Docker
 
 ```
 cd ~/topse-tools/preparation/utils/heat
-heat stack-create --poll -f build_docker_image.yaml -P "password=password" -P "reposerver=157.1.141.22" docker-image-build
+heat stack-create --poll -f build_docker_image.yaml -P "password=password" -P "reposerver=157.1.141.15" docker-image-build
 
 nova list
 nova console-log docker-image-build
@@ -482,7 +485,7 @@ cd ~/topse-tools/preparation/utils/heat
 source openrc_teacher02
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
-heat stack-create --poll -f etherpad.yaml -P "reposerver=157.1.141.22" etherpad
+heat stack-create --poll -f etherpad.yaml -P "reposerver=157.1.141.15" etherpad
 
 nova console-log --length 100 etherpad
 heat output-show etherpad floating_ip
@@ -494,7 +497,7 @@ heat output-show etherpad floating_ip
 ### 生徒用アカウントの払い出し
 
 ```
-unset OS_TENANT_NAME
+unset OS_PROJECT_NAME
 unset OS_USERNAME
 unset OS_PASSWORD
 unset OS_AUTH_URL
