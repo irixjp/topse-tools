@@ -131,6 +131,9 @@ resources:
             setenforce 0
             sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
             yum update -y
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel*
+            yum clean all
             yum install -y \
             docker \
             git \
@@ -140,10 +143,7 @@ resources:
             python-devel \
             python-pip \
             python-heatclient python-openstackclient
-
-            systemctl disable firewalld.service
             systemctl enable docker
-
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
 

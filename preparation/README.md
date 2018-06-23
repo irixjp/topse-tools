@@ -150,8 +150,9 @@ ansible openstack-all -u root -m shell -a 'cat /etc/sysconfig/network-scripts/if
 
 kipmi が CPU100%になる場合のワークアラウンド
 ```
-# プロセスの確認
+# プロセス/CPUの確認
 ansible openstack-all -u root -m shell -a 'top -b -n 1 | grep kipmi'
+ansible openstack-all -u root -m shell -a 'vmstat 1 10'
 
 # もし100%だったら実行
 ansible openstack-all -u root -m shell -a 'echo 100 > /sys/module/ipmi_si/parameters/kipmid_max_busy_us'
@@ -192,6 +193,11 @@ ansible-playbook 06_reboot.yml
 ```
 
 yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
+
+
+```bash
+ansible openstack-all -u root -m shell -a 'setenforce 0'
+```
 
 
 
@@ -274,7 +280,10 @@ cd ~/topse-tools/preparation/utils/heat
 source openrc_teacher01
 nova list
 
-heat stack-create --poll -f test_default.yaml -P "password=password" -P "reposerver=157.1.141.15" test_console
+HEAT_PASSWD=password
+HEAT_REPOIP=157.1.141.11
+
+heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
 ```
 
 コンソールにログインしてテストの実施準備。パスワードは上記で設定した値。
@@ -307,7 +316,7 @@ source ../../../hands-on/support.sh
 - オーバーコミットが正しく設定されているか？
 - 全台起動できているか？(CLUSTER x 5 台起動するはず)
 
-```
+```bash
 CLUSTER=5
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.tiny" test_massive1
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.small" test_massive2
@@ -318,7 +327,13 @@ heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTE
 nova list
 nova list | grep test_massive | wc -l
 nova-manage vm list  # CC で実施する
+```
 
+```bash
+for i in `nova list |grep massive |awk '{print $12}' | awk -F'=' '{print $2}'`; do ping -c 1 > /dev/null $i; echo -n $?; done
+```
+
+```bash
 heat stack-delete -y test_massive1
 heat stack-delete -y test_massive2
 heat stack-delete -y test_massive3
@@ -352,6 +367,8 @@ heat stack-delete -y test_cluster
 スタックのアップグレードでフレーバーの変更ができるか確認。`allow_resize_to_same_host` と Migration 設定がうまく行っていないと RESIZE時に UPDATE\_IN\_PROGRESS のまま失敗する。
 
 参考にしたページ：https://qiita.com/kentarosasaki/items/9c0b6c9200bf424311f9
+
+* 6/23 selinux の影響で、/var/lib/nova/.ssh/ の鍵が読み込めずに、resize 等が失敗する現象に遭遇。どのポリシーを適用すればいいのかわからなかったので、とりあえず `setenforce 0` で対処
 
 - フレーバーの変更ができればOK。
 
@@ -428,8 +445,11 @@ openstack image delete Docker
 起動すると yum update と 基本パッケージのインストールがおこなわれ最後にリブートされる。
 
 ```
+HEAT_PASSWD=password
+HEAT_REPOIP=157.1.141.11
+
 cd ~/topse-tools/preparation/utils/heat
-heat stack-create --poll -f build_docker_image.yaml -P "password=password" -P "reposerver=157.1.141.15" docker-image-build
+heat stack-create --poll -f build_docker_image.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" docker-image-build
 
 nova list
 nova console-log docker-image-build
@@ -483,9 +503,12 @@ teacher02 アカウントで作成する。
 ```
 cd ~/topse-tools/preparation/utils/heat
 source openrc_teacher02
+nova list
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
-heat stack-create --poll -f etherpad.yaml -P "reposerver=157.1.141.15" etherpad
+
+HEAT_REPOIP=157.1.141.11
+heat stack-create --poll -f etherpad.yaml -P "reposerver=${HEAT_REPOIP:?}" etherpad
 
 nova console-log --length 100 etherpad
 heat output-show etherpad floating_ip
