@@ -122,12 +122,17 @@ resources:
     properties:
       config: |
         #!/bin/bash -ex
+        yum update -y
+        rm -f /etc/yum.repos.d/CentOS*
+        rm -f /etc/yum.repos.d/epel*
+        yum clean all
         yum install -y wget crudini vim bash-completion qemu-kvm libvirt virt-manager virt-install
         systemctl start libvirtd
         virsh net-destroy default
         virsh net-undefine default
         systemctl restart libvirtd
         yum groupinstall -y "GNOME Desktop"
+        systemctl set-default graphical.target
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
