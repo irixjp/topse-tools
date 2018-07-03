@@ -119,32 +119,53 @@ cat ~/.ssh/id_rsa.pub
 演習サーバーの設定が変わったようで、初回のログイン時にパスワードの変更を要求される（空にできない）。同じ状況の場合は、 ansible コマンドに -K をつけて、sudo 時のパスワードを入力する。
 
 ```
+# nova で設定されたキーをコピーする
+vim ~/.ssh/id_temp.pem
+chmod 0400 ~/.ssh/id_temp.pem
+
+# インベントリにホストを設定
 cd /mnt/topse-tools/preparation/
+vim production
 
 # 接続確認
-ansible openstack-all -f 10 -u centos -b -m ping
+ansible openstack-all --private-key ~/.ssh/id_temp.pem -f 10 -u centos -b -m ping -o
+
+# 作成したキーを各ホストの authorized_keys へ書き込む
+ansible openstack-all --private-key ~/.ssh/id_temp.pem -f 10 -u centos -m shell -a "echo $KEY >> ~/.ssh/authorized_keys" -o
+ansible openstack-all -f 10 -u centos -b -m ping -o
 
 # root の authorized_key にコピー
-ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys >> /root/.ssh/authorized_keys'
+ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys >> /root/.ssh/authorized_keys' -o
 
 # root ログインを有効化
-ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd"
+ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd" -o
 
 # root での接続テスト
-ansible openstack-all -f 10 -u root -m ping
+ansible openstack-all -f 10 -u root -m ping -o
 ```
+
+講師のキーを設定する
+```
+# 公開鍵を変数に設定する
+TEACHER_KEY=""
+ansible openstack-all -f 10 -u centos -m shell -a "echo ${TEACHER_KEY:?}" -o
+ansible openstack-all -f 10 -u centos -m shell -a "echo ${TEACHER_KEY:?} >> ~/.ssh/authorized_keys" -o
+ansible openstack-all -f 10 -u centos -m shell -a "cat ~/.ssh/authorized_keys"
+```
+
+
 
 Gen3でのネットワーク対応。cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
 
 ```
-ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh'
+ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh' -o
 ```
 
 DNSが eno3 の DHCP に上書きされるので、無効にしておく（eno2 を使う）
 
 ```
-ansible openstack-all -u root -m shell -a 'echo PEERDNS=no >> /etc/sysconfig/network-scripts/ifcfg-eno3'
-ansible openstack-all -u root -m shell -a 'cat /etc/sysconfig/network-scripts/ifcfg-eno3'
+ansible openstack-all -u root -m shell -a 'echo PEERDNS=no >> /etc/sysconfig/network-scripts/ifcfg-eno3' -o
+ansible openstack-all -u root -m shell -a 'cat /etc/sysconfig/network-scripts/ifcfg-eno3' -o
 ```
 
 
@@ -174,29 +195,82 @@ OpenStackのデプロイ
 
 ### 構築の実行
 
+`-f` で台数分以上にFORKさせる（早く終る
+
 ```
+FORK=20
+
 cd /mnt/topse-tools/preparation/
-ansible-playbook site.yml
+ansible-playbook -f ${FORK:?} site.yml
 ```
 
 もし個別のステップを実行する場合には以下のようにする(手間がかかるがこっちがおすすめ
 ```
-ansible-playbook 01_pre_connection_test.yml
-ansible-playbook 02_requirements_setup.yml
-ansible-playbook 03_reboot.yml
+ansible-playbook -f ${FORK:?} 01_pre_connection_test.yml
+ansible-playbook -f ${FORK:?} 02_requirements_setup.yml
+ansible-playbook -f ${FORK:?} 03_reboot.yml
 
 ここで少しCPUの様子を見る
+ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
 
-ansible-playbook 04_test_requiremetns.yml
-ansible-playbook 05_packstack.yml
-ansible-playbook 06_reboot.yml
+ansible-playbook -f ${FORK:?} 04_test_requiremetns.yml
+ansible-playbook -f ${FORK:?} 05_packstack.yml
+ansible-playbook -f ${FORK:?} 06_reboot.yml
+
+ここで少しCPUの様子を見る
+ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
 ```
 
 yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
 
 
+MariaDB がエラーになる問題の対処
+
+参考: https://www.tuxfixer.com/mariadb-high-cpu-usage-in-openstack-pike/#more-3897
+```
+# CPU が 100% で張り付く
+   PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+  2431 mysql     20   0 20.783g 388552  12680 R 100.0  0.3  16:08.93 mysqld
+
+# エラーログが出る
+cat /var/log/mariadb/mariadb.log | grep Error
+2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
+2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
+2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
+2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
+2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
+```
+
+```
+# ulimit の増加
+vim /etc/security/limits.conf
+---
+*         hard    nofile      600000
+*         soft    nofile      600000
+root      hard    nofile      600000
+root      soft    nofile      600000
+---
+
+# mariadb Limits の増加
+mkdir /etc/systemd/system/mariadb.service.d/
+vim /etc/systemd/system/mariadb.service.d/limits.conf
+---
+[Service]
+LimitNOFILE=600000
+---
+
+systemctl daemon-reload
+
+mysql -u root
+show variables like 'open_files_limit';
+
+ansible-playbook -f ${FORK:?} 06_reboot.yml
+```
+
+
+SELinux が有効だと、Resize/Migration が失敗する。ワークアラウンドの対応。リブートすると無効になる。
 ```bash
-ansible openstack-all -u root -m shell -a 'setenforce 0'
+ansible openstack-all -u root -m shell -a 'setenforce 0' -o
 ```
 
 
@@ -238,7 +312,10 @@ heat stack-create --poll -f heat_basic_setting.yaml default
 ### クォータ、フレーバー、イメージの設定
 
 ```
-openstack quota set --instances 500 --floating-ips 100 --ram 819200 --volumes 100 --gigabytes 300 --cores 300 --ports 300 topse01
+# テスト用テナント
+openstack quota set --instances 1000 --floating-ips 100 --ram 8192000 --volumes 100 --gigabytes 300 --cores 1000 --ports 1000 topse01
+
+# 演習用のユーティリティ提供テナント
 openstack quota set --instances 5 --floating-ips 2 --ram 40960 --volumes 10 --gigabytes 10 --cores 20 topse02
 
 nova flavor-delete 1
@@ -281,7 +358,7 @@ source openrc_teacher01
 nova list
 
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.11    # reposerver のIPを設定する
 
 heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
 ```
@@ -306,29 +383,32 @@ git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 cd preparation/utils/heat/
 source openrc_teacher01
 source ../../../hands-on/support.sh
+nova list
 ```
 
 ### リソース作成テスト2
 
-全フレーバーで全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。
+全フレーバーで全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。250台を超えるとNWセグメントが枯渇するので、50より上にしないようにする。
 
 - 全コンピュートに分散するか？
 - オーバーコミットが正しく設定されているか？
 - 全台起動できているか？(CLUSTER x 5 台起動するはず)
 
 ```bash
-CLUSTER=5
+CLUSTER=48
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.tiny" test_massive1
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.small" test_massive2
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.medium" test_massive3
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.large" test_massive4
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.xlarge" test_massive5
 
+heat stack-list
 nova list
 nova list | grep test_massive | wc -l
 nova-manage vm list  # CC で実施する
 ```
 
+ping を飛ばす。出力が全部0ならOK。
 ```bash
 for i in `nova list |grep massive |awk '{print $12}' | awk -F'=' '{print $2}'`; do ping -c 1 > /dev/null $i; echo -n $?; done
 ```
@@ -507,7 +587,7 @@ nova list
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
 
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.12
 heat stack-create --poll -f etherpad.yaml -P "reposerver=${HEAT_REPOIP:?}" etherpad
 
 nova console-log --length 100 etherpad
@@ -537,6 +617,7 @@ source ~/keystonerc_admin
 元ファイルをコピー
 
 ```
+cd preparation
 cp 10_add_test_student.sh 20_add_students.sh
 vi 20_add_students.sh
 ```
