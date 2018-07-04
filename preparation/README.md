@@ -144,7 +144,8 @@ ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no
 ansible openstack-all -f 10 -u root -m ping -o
 ```
 
-講師のキーを設定する
+### 講師のキーを設定する
+
 ```
 # 公開鍵を変数に設定する
 TEACHER_KEY=""
@@ -155,13 +156,15 @@ ansible openstack-all -f 10 -u centos -m shell -a "cat ~/.ssh/authorized_keys"
 
 
 
-Gen3でのネットワーク対応。cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
+### Gen3でのネットワーク対応
+
+cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
 
 ```
 ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh' -o
 ```
 
-DNSが eno3 の DHCP に上書きされるので、無効にしておく（eno2 を使う）
+### DNSが eno3 の DHCP に上書きされるので、無効にしておく（eno2 のDNSを使う）
 
 ```
 ansible openstack-all -u root -m shell -a 'echo PEERDNS=no >> /etc/sysconfig/network-scripts/ifcfg-eno3' -o
@@ -169,7 +172,8 @@ ansible openstack-all -u root -m shell -a 'cat /etc/sysconfig/network-scripts/if
 ```
 
 
-kipmi が CPU100%になる場合のワークアラウンド
+### kipmi が CPU100%になる場合のワークアラウンド
+
 ```
 # プロセス/CPUの確認
 ansible openstack-all -u root -m shell -a 'top -b -n 1 | grep kipmi'
@@ -224,7 +228,7 @@ ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
 yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
 
 
-MariaDB がエラーになる問題の対処
+### MariaDB がエラーになる問題の対処
 
 参考: https://www.tuxfixer.com/mariadb-high-cpu-usage-in-openstack-pike/#more-3897
 ```
@@ -268,7 +272,10 @@ ansible-playbook -f ${FORK:?} 06_reboot.yml
 ```
 
 
-SELinux が有効だと、Resize/Migration が失敗する。ワークアラウンドの対応。リブートすると無効になる。
+### SELinux が有効だと、Resize/Migration が失敗する。
+
+ワークアラウンド、リブートすると無効になる。
+
 ```bash
 ansible openstack-all -u root -m shell -a 'setenforce 0' -o
 ```
@@ -409,6 +416,7 @@ nova-manage vm list  # CC で実施する
 ```
 
 ping を飛ばす。出力が全部0ならOK。
+
 ```bash
 for i in `nova list |grep massive |awk '{print $12}' | awk -F'=' '{print $2}'`; do ping -c 1 > /dev/null $i; echo -n $?; done
 ```
