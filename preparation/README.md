@@ -119,20 +119,12 @@ cat ~/.ssh/id_rsa.pub
 演習サーバーの設定が変わったようで、初回のログイン時にパスワードの変更を要求される（空にできない）。同じ状況の場合は、 ansible コマンドに -K をつけて、sudo 時のパスワードを入力する。
 
 ```
-# nova で設定されたキーをコピーする
-vim ~/.ssh/id_temp.pem
-chmod 0400 ~/.ssh/id_temp.pem
-
 # インベントリにホストを設定
 cd /mnt/topse-tools/preparation/
 vim production
 
 # 接続確認
-ansible openstack-all --private-key ~/.ssh/id_temp.pem -f 10 -u centos -b -m ping -o
-
-# 作成したキーを各ホストの authorized_keys へ書き込む
-ansible openstack-all --private-key ~/.ssh/id_temp.pem -f 10 -u centos -m shell -a "echo $KEY >> ~/.ssh/authorized_keys" -o
-ansible openstack-all -f 10 -u centos -b -m ping -o
+ansible openstack-all --private-key ~/.ssh/id_rsa -f 10 -u centos -b -m ping -o
 
 # root の authorized_key にコピー
 ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys >> /root/.ssh/authorized_keys' -o
@@ -144,23 +136,13 @@ ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no
 ansible openstack-all -f 10 -u root -m ping -o
 ```
 
-### 講師のキーを設定する
-
-```
-# 公開鍵を変数に設定する
-TEACHER_KEY=""
-ansible openstack-all -f 10 -u centos -m shell -a "echo ${TEACHER_KEY:?}" -o
-ansible openstack-all -f 10 -u centos -m shell -a "echo ${TEACHER_KEY:?} >> ~/.ssh/authorized_keys" -o
-ansible openstack-all -f 10 -u centos -m shell -a "cat ~/.ssh/authorized_keys"
-```
-
-
 
 ### Gen3でのネットワーク対応
 
 cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
 
 ```
+ansible openstack-all -u root -m shell -a 'ls -l /var/lib/cloud/scripts/per-boot/set_network.sh' -o
 ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh' -o
 ```
 
@@ -190,17 +172,18 @@ OpenStackのデプロイ
 
 ### 事前の確認
 
-- リポジトリサーバーのIPアドレス → `group_vars/all`
-- OpenStack に設定する admin パスワード → `group_vars/all`
-- OpenStackノードのIPアドレス → `production`
-- NIC の名前 → `group_vars/production`
-- コントローラーのIPアドレス → `utils/ifcfg-br-ex-eno2.cfg.j2`
+- リポジトリサーバーのIPアドレスを記入 → `group_vars/all`
+- OpenStack に設定する admin パスワードを記入 → `group_vars/all`
+- OpenStackノードのIPアドレスの記入 → `production`
+- NIC の名前を記入 → `group_vars/production`
+- コントローラーのIPアドレスを記入 → `utils/ifcfg-br-ex-eno2.cfg.j2`
 
 
 ### 構築の実行
 
 `-f` で台数分以上にFORKさせる（早く終る
 
+一発で終わらせる場合（非推奨）
 ```
 FORK=20
 
@@ -210,25 +193,35 @@ ansible-playbook -f ${FORK:?} site.yml
 
 もし個別のステップを実行する場合には以下のようにする(手間がかかるがこっちがおすすめ
 ```
+FORK=20
+
+cd /mnt/topse-tools/preparation/
 ansible-playbook -f ${FORK:?} 01_pre_connection_test.yml
 ansible-playbook -f ${FORK:?} 02_requirements_setup.yml
 ansible-playbook -f ${FORK:?} 03_reboot.yml
 
-ここで少しCPUの様子を見る
+# ここで少しCPUとI/Oの様子を見る
 ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
 
 ansible-playbook -f ${FORK:?} 04_test_requiremetns.yml
 ansible-playbook -f ${FORK:?} 05_packstack.yml
+
+# 後述するMariaDBの対策を実施する
+
 ansible-playbook -f ${FORK:?} 06_reboot.yml
 
-ここで少しCPUの様子を見る
+# 後述するSELinuxの無効化を行う
+
+#ここで少しCPUとI/Oの様子を見る
 ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
 ```
 
-yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
+* yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
 
 
 ### MariaDB がエラーになる問題の対処
+
+コントローラーノードで実行
 
 参考: https://www.tuxfixer.com/mariadb-high-cpu-usage-in-openstack-pike/#more-3897
 ```
@@ -264,6 +257,7 @@ LimitNOFILE=600000
 ---
 
 systemctl daemon-reload
+systemctl restart mariadb
 
 mysql -u root
 show variables like 'open_files_limit';
@@ -364,8 +358,9 @@ cd ~/topse-tools/preparation/utils/heat
 source openrc_teacher01
 nova list
 
+# 環境に合わせて変更
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.11    # reposerver のIPを設定する
+HEAT_REPOIP=157.1.141.16
 
 heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
 ```
@@ -411,7 +406,7 @@ heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTE
 
 heat stack-list
 nova list
-nova list | grep test_massive | wc -l
+nova list | grep test_massive |grep Running | wc -l
 nova-manage vm list  # CC で実施する
 ```
 
@@ -534,7 +529,7 @@ openstack image delete Docker
 
 ```
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.16
 
 cd ~/topse-tools/preparation/utils/heat
 heat stack-create --poll -f build_docker_image.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" docker-image-build
@@ -595,7 +590,7 @@ nova list
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
 
-HEAT_REPOIP=157.1.141.12
+HEAT_REPOIP=157.1.141.16
 heat stack-create --poll -f etherpad.yaml -P "reposerver=${HEAT_REPOIP:?}" etherpad
 
 nova console-log --length 100 etherpad
