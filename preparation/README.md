@@ -34,12 +34,13 @@ tmpfs            13G     0   13G   0% /run/user/1000
 ### 最新化・必要パッケージのインストール
 
 ```
+yum install -y tmux
 yum update -y
 yum install -y epel-release
 yum install -y qemu-kvm libvirt virt-manager virt-install \
                libguestfs libguestfs-tools \
                yum-utils device-mapper-persistent-data lvm2 \
-               screen tmux jq ansible git vim tmux
+               jq ansible git vim
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 yum install -y docker-ce
 ```
@@ -70,7 +71,7 @@ cd /mnt
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2019-01
+BRANCH_NAME=2019-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 mkdir -p /mnt/dvd
@@ -127,7 +128,7 @@ vim production
 ansible openstack-all --private-key ~/.ssh/id_rsa -f 10 -u centos -b -m ping -o
 
 # root の authorized_key にコピー
-ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys >> /root/.ssh/authorized_keys' -o
+ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys > /root/.ssh/authorized_keys' -o
 
 # root ログインを有効化
 ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd" -o
@@ -289,7 +290,7 @@ cd ~/
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2019-01
+BRANCH_NAME=2019-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 cd ~/
@@ -360,7 +361,7 @@ nova list
 
 # 環境に合わせて変更
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.16
+HEAT_REPOIP=157.1.141.11
 
 heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
 ```
@@ -375,7 +376,7 @@ ssh centos@${CONSOLE}
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2019-01
+BRANCH_NAME=2019-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 ```
 
@@ -397,7 +398,7 @@ nova list
 - 全台起動できているか？(CLUSTER x 5 台起動するはず)
 
 ```bash
-CLUSTER=48
+CLUSTER=30
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.tiny" test_massive1
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.small" test_massive2
 heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.medium" test_massive3
@@ -451,7 +452,7 @@ heat stack-delete -y test_cluster
 
 参考にしたページ：https://qiita.com/kentarosasaki/items/9c0b6c9200bf424311f9
 
-* 6/23 selinux の影響で、/var/lib/nova/.ssh/ の鍵が読み込めずに、resize 等が失敗する現象に遭遇。どのポリシーを適用すればいいのかわからなかったので、とりあえず `setenforce 0` で対処
+* 6/23 selinux の影響で、/var/lib/nova/.ssh/ の鍵が読み込めずに、resize 等が失敗する現象に遭遇。どのポリシーを適用すればいいのかわからなかったので、とりあえず `setenforce 0` で対処。再起動すると同じ現象になるので、再度 `setenforce` する。
 
 - フレーバーの変更ができればOK。
 
@@ -529,7 +530,7 @@ openstack image delete Docker
 
 ```
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.16
+HEAT_REPOIP=157.1.141.11
 
 cd ~/topse-tools/preparation/utils/heat
 heat stack-create --poll -f build_docker_image.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" docker-image-build
@@ -590,7 +591,7 @@ nova list
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
 
-HEAT_REPOIP=157.1.141.16
+HEAT_REPOIP=157.1.141.11
 heat stack-create --poll -f etherpad.yaml -P "reposerver=${HEAT_REPOIP:?}" etherpad
 
 nova console-log --length 100 etherpad
