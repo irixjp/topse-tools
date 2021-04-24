@@ -4,15 +4,14 @@ TOPSE「クラウド基盤構築演習」環境構築方法
 研究クラウド側のイメージ
 ------------
 
-`centos7-image_20170519` を使用してベアメタルインスタンス `c20.m128.d1500` を起動する。
-
-* 2018/6/20 に確認したところ、イメージが `centos7-image_20180403` になっており、newton が動かない模様。
+`centos7-image_20170519` を使用してベアメタルインスタンス `compute.a` を起動する。
 
 利用するサーバーの種類
 
 - リポジトリ・演習素材配布サーバー 1台（作業の前半はここで実施）
 - コントローラー 1台（作業の後半はここから実施）
 - コンピュート N台
+  - コンピュートの台数は `受講者 / 5` を切り上げて予備を +1 した台数。
 
 ```
 Filesystem      Size  Used Avail Use% Mounted on
@@ -71,7 +70,7 @@ cd /mnt
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2019-02
+BRANCH_NAME=2020-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 mkdir -p /mnt/dvd
@@ -177,6 +176,7 @@ OpenStackのデプロイ
 - OpenStack に設定する admin パスワードを記入 → `group_vars/all`
 - OpenStackノードのIPアドレスの記入 → `production`
 - NIC の名前を記入 → `group_vars/production`
+  - 157.x.x.x のIPが設定されたNICを指定（通常は eno2）
 - コントローラーのIPアドレスを記入 → `utils/ifcfg-br-ex-eno2.cfg.j2`
 
 
@@ -290,7 +290,7 @@ cd ~/
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2019-02
+BRANCH_NAME=2020-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 cd ~/
@@ -361,7 +361,7 @@ nova list
 
 # 環境に合わせて変更
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.19
 
 heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
 ```
@@ -376,7 +376,7 @@ ssh centos@${CONSOLE}
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2019-02
+BRANCH_NAME=2020-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 ```
 
@@ -591,7 +591,7 @@ nova list
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
 
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.19
 heat stack-create --poll -f etherpad.yaml -P "reposerver=${HEAT_REPOIP:?}" etherpad
 
 nova console-log --length 100 etherpad

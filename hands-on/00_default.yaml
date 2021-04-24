@@ -164,6 +164,8 @@ resources:
             chown centos:centos /home/centos/.ssh/id_rsa.pub
             chmod 600 /home/centos/.ssh/id_rsa
             chmod 644 /home/centos/.ssh/id_rsa.pub
+            echo "source ~/openrc" >> /home/centos/.bashrc
+            echo "source ~/support.sh" >> /home/centos/.bashrc
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
