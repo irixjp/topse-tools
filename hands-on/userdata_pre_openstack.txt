@@ -5,7 +5,7 @@ mkdir -p /root/temp
 echo "xxx.xxx.xxx.xxx reposerver" >> /etc/hosts
 
 rm -f /etc/yum.repos.d/*
-curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repos/edubase.repo
 yum clean all
 yum repolist
 

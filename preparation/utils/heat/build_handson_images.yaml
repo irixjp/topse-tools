@@ -1,0 +1,185 @@
+heat_template_version: 2018-08-31
+
+description: Creating Handson image
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will give the specific ip address.
+
+  password:
+    type: string
+    label: Server password
+    description: You set your password on your instances. It will be used by user centos
+
+resources:
+  secg:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: open-all
+      rules:
+        - protocol: icmp
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          port_range_min: 1
+          port_range_max: 65535
+          remote_ip_prefix: 0.0.0.0/0
+
+  private_network:
+    type: OS::Neutron::Net
+    properties:
+      name: work-net
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: work-subnet
+      ip_version: 4
+      network_id: { get_resource: private_network }
+      cidr: 192.168.199.0/24
+      gateway_ip: 192.168.199.254
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+
+  ext_router:
+    type: OS::Neutron::Router
+    properties:
+      name: Ext-Router
+      external_gateway_info:
+        network: public
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: ext_router }
+      subnet_id: { get_resource: private_subnet }
+
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 600
+
+  key_pair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: key-for-console
+      save_private_key: true
+
+  neutron-port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: private_network }
+      fixed_ips:
+        - ip_address: 192.168.199.250
+      security_groups:
+        - { get_resource: secg }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on: router_interface
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron-port }
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_param: password }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_set_reposerver:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+          template: |
+            #!/bin/bash -ex
+            REPOSERVER=__heat_reposerver_ip
+            dnf clean all
+            rm -rf /etc/yum.repos.d/CentOS-Linux-*
+            curl -o /etc/yum.repos.d/edubase.repo http://${REPOSERVER}/repos/edubase.repo
+            echo "${REPOSERVER} reposerver" >> /etc/hosts
+            dnf repolist
+
+
+  config_init_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $_private_key_: { get_attr: [ key_pair, private_key ] }
+            $_public_key_: { get_attr: [ key_pair, public_key ] }
+          template: |
+            #!/bin/bash -ex
+            echo "LANG=en_US.utf-8" > /etc/environment
+            echo "LC_ALL=en_US.utf-8" >> /etc/environment
+            dnf update -y
+            dnf install -y crudini qemu-kvm bash-completion git wget vim
+            echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
+            modprobe -r kvm_intel
+            modprobe kvm_intel
+
+
+  config_send_notify_after_settings:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            reboot
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_set_reposerver }
+      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_send_notify_after_settings }
+
+  instance1:
+    type: OS::Nova::Server
+    properties:
+      name: handson-base-image
+      image: CentOS8-orig
+      flavor: m1.tiny
+      key_name: { get_resource: key_pair }
+      networks:
+        - port: { get_resource: neutron-port }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+      metadata:
+        reposerver: { get_param: reposerver }
+
+outputs:
+  console:
+    description: console server information
+    value:
+      name: { get_attr: [ instance1, name ] }
+      ip_address: { get_attr: [ neutron-port, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+      password: { get_param: password }
+      private_key: { get_attr: [ key_pair, private_key ] }
+      reposerver: { get_param: reposerver }
