@@ -10,8 +10,7 @@ parameters:
 
   boot_image:
     type: string
-    label: boot image
-    default: CentOS7
+    default: CentOS8
 
 resources:
   secg:
