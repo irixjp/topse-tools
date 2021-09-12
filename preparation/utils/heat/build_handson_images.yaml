@@ -152,7 +152,7 @@ resources:
           template: |
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
-            reboot
+            shutdown -h now
 
   server_init:
     type: OS::Heat::MultipartMime

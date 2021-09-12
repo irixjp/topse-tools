@@ -1,4 +1,4 @@
-heat_template_version: 2015-04-30
+heat_template_version: 2018-08-31
 
 description: Setup default handson environment.
 
@@ -109,12 +109,20 @@ resources:
         str_replace:
           params:
             __heat_reposerver_ip: { get_param: reposerver }
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
             echo "__heat_reposerver_ip reposerver" >> /etc/hosts
+            if ping -c 1 reposerver &> /dev/null
+            then
+              echo connecting reposerver
+            else
+              __heat_wc_notify --data-binary '{"status": "FAILURE"}' 
+              exit 1
+            fi
             rm -f /etc/yum.repos.d/CentOS*
             rm -f /etc/yum.repos.d/epel*
-            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repos/edubase.repo
             yum clean all
             yum repolist
 
@@ -126,31 +134,27 @@ resources:
           params:
             $_private_key_: { get_attr: [ key_pair, private_key ] }
             $_public_key_: { get_attr: [ key_pair, public_key ] }
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
-            yum install -y \
-            python2-novaclient \
-            python2-cinderclient \
-            python2-keystoneclient \
-            python2-neutronclient \
-            python2-glanceclient \
-            python2-swiftclient \
-            python2-heatclient \
-            python-openstackclient \
+            if ping -c 1 reposerver &> /dev/null
+            then
+              echo connecting reposerver
+            else
+              __heat_wc_notify --data-binary '{"status": "FAILURE"}'
+              exit 1
+            fi
+
+            dnf install -y \
+            python3-openstackclient \
+            python3-heatclient \
             jq \
             wget \
             vim \
             crudini \
             bash-completion \
             ansible \
-            lynx \
-            plotnetcfg \
-            graphviz \
-            httpd \
             git
-
-            systemctl enable httpd
-            systemctl start httpd
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
@@ -191,8 +195,8 @@ resources:
     type: OS::Nova::Server
     properties:
       name: console
-      image: CentOS7
-      flavor: m1.tiny
+      image: centos8
+      flavor: m1.small
       key_name: { get_resource: key_pair }
       networks:
         - port: { get_resource: neutron-port }
