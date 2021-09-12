@@ -9,5 +9,14 @@ cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 systemctl restart sshd
 
+cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth1
+BOOTPROTO=none
+DEVICE=eth1
+ONBOOT=yes
+TYPE=Ethernet
+USERCTL=no
+EOF
+
 echo "### finish!! ###"
 
+reboot
