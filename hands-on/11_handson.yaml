@@ -1,13 +1,8 @@
-heat_template_version: 2015-04-30
+heat_template_version: 2018-08-31
 
 description: 11th Hands-on Environment
 
 parameters:
-  reposerver:
-    type: string
-    label: hands-on repository server
-    description: Teahcer will gives the specific ip address.
-
   password:
     type: string
     label: Server password
@@ -122,22 +117,6 @@ resources:
         ssh_pwauth: True
         timezone: Asia/Tokyo
 
-  config_set_repo:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config:
-        str_replace:
-          params:
-            __heat_reposerver_ip: { get_param: reposerver }
-          template: |
-            #!/bin/bash -ex
-            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
-            rm -f /etc/yum.repos.d/CentOS*
-            rm -f /etc/yum.repos.d/epel*
-            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
-            yum clean all
-            yum repolist
-
   config_send_notify:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -149,126 +128,12 @@ resources:
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
 
-  config_send_notify_after_reboot:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config:
-        str_replace:
-          params:
-            __heat_wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
-          template: |
-            #!/bin/bash -ex
-            cat << EOF >> /etc/rc.d/rc.local
-            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
-            EOF
-            chmod u+x /etc/rc.d/rc.local
-
-  config_reboot:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config: |
-        #!/bin/bash -ex
-        reboot
-
-  config_pre_openstack_common:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config:
-        str_replace:
-          params:
-            $_private_key_: { get_attr: [ key_pair, private_key ] }
-            $_public_key_: { get_attr: [ key_pair, public_key ] }
-          template: |
-            #!/bin/bash -ex
-            yum install -y wget crudini vim bash-completion lynx jq plotnetcfg graphviz openstack-utils
-            yum update -y
-
-            rm -f /etc/yum.repos.d/CentOS*
-            rm -f /etc/yum.repos.d/epel-*
-
-            echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-            sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-            mkdir -p /root/.ssh
-            chmod 700 /root/.ssh
-            rm -f /root/.ssh/authorized_keys
-            cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
-            chmod 600 /root/.ssh/authorized_keys
-
-            echo "$_private_key_" > /home/centos/.ssh/id_rsa
-            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
-            chown centos:centos /home/centos/.ssh/id_rsa
-            chown centos:centos /home/centos/.ssh/id_rsa.pub
-            chmod 600 /home/centos/.ssh/id_rsa
-            chmod 644 /home/centos/.ssh/id_rsa.pub
-
-            echo "$_private_key_" > /root/.ssh/id_rsa
-            echo "$_public_key_" > /root/.ssh/id_rsa.pub
-            chmod 600 /root/.ssh/id_rsa
-            chmod 644 /root/.ssh/id_rsa.pub
-
-
-  config_pre_openstack_cc:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config: |
-        #!/bin/bash -ex
-        yum install -y openstack-packstack
-
-        echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
-        modprobe -r kvm_intel
-        modprobe kvm_intel
-        cat /sys/module/kvm_intel/parameters/nested
-
-        cat << EOF > /usr/lib/sysctl.d/00-system.conf
-        net.ipv4.ip_forward = 1
-        net.ipv4.conf.default.rp_filter = 0
-        net.ipv4.conf.all.rp_filter = 0
-        net.ipv4.conf.all.forwarding = 1
-        EOF
-
-        cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth1
-        DEVICE="eth1"
-        BOOTPROT="none"
-        ONBOOT="yes"
-        TYPE="OVSPort"
-        DEVICETYPE="ovs"
-        OVS_BRIDGE="br-ex"
-        EOF
-
-        cat << EOF > /etc/sysconfig/network-scripts/ifcfg-br-ex
-        DEVICE="br-ex"
-        BOOTPROT="none"
-        ONBOOT="yes"
-        TYPE="OVSBridge"
-        DEVICETYPE="ovs"
-        OVSBOOTPROTO="none"
-        OVSDHCPINTERFACES="eth1"
-        EOF
-
-  server_init_openstack_cc:
+  server_init:
     type: OS::Heat::MultipartMime
     properties:
       parts:
       - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_set_repo }
       - config: { get_resource: config_send_notify }
-      - config: { get_resource: config_pre_openstack_common }
-      - config: { get_resource: config_pre_openstack_cc }
-      - config: { get_resource: config_send_notify }
-      - config: { get_resource: config_send_notify_after_reboot }
-      - config: { get_resource: config_reboot }
-
-  server_init_openstack_compute:
-    type: OS::Heat::MultipartMime
-    properties:
-      parts:
-      - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_set_repo }
-      - config: { get_resource: config_send_notify }
-      - config: { get_resource: config_pre_openstack_common }
-      - config: { get_resource: config_send_notify }
-      - config: { get_resource: config_send_notify_after_reboot }
-      - config: { get_resource: config_reboot }
 
   instance_openstack_cc:
     type: OS::Nova::Server
@@ -281,7 +146,7 @@ resources:
         - port: { get_resource: neutron_port_cc_eth0 }
         - port: { get_resource: neutron_port_cc_eth1 }
       user_data_format: RAW
-      user_data: { get_resource: server_init_openstack_cc }
+      user_data: { get_resource: server_init }
 
   instance_openstack_node1:
     type: OS::Nova::Server
@@ -293,7 +158,7 @@ resources:
       networks:
         - port: { get_resource: neutron_port_node1_eth0 }
       user_data_format: RAW
-      user_data: { get_resource: server_init_openstack_compute }
+      user_data: { get_resource: server_init }
 
   instance_openstack_node2:
     type: OS::Nova::Server
@@ -305,7 +170,7 @@ resources:
       networks:
         - port: { get_resource: neutron_port_node2_eth0 }
       user_data_format: RAW
-      user_data: { get_resource: server_init_openstack_compute }
+      user_data: { get_resource: server_init }
 
 outputs:
   instance1:
