@@ -64,7 +64,7 @@ resources:
     properties:
       handle: { get_resource: wait_handle }
       count: 1
-      timeout: 600
+      timeout: 3600
 
   key_pair:
     type: OS::Nova::KeyPair
