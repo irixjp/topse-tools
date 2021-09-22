@@ -127,12 +127,7 @@ resources:
             dnf install -y \
             python3-openstackclient \
             python3-heatclient \
-            jq \
-            wget \
-            vim \
-            crudini \
-            bash-completion \
-            git
+            jq wget vim crudini bash-completion git
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
