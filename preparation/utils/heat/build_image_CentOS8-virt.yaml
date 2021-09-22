@@ -35,7 +35,6 @@ resources:
 
   floating_ip_assoc:
     type: OS::Neutron::FloatingIPAssociation
-    depends_on: router_interface
     properties:
       floatingip_id: { get_resource: floating_ip }
       port_id: { get_resource: neutron-port }
