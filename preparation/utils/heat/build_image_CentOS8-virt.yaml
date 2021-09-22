@@ -2,12 +2,6 @@ heat_template_version: 2018-08-31
 
 description: Creating Handson image
 
-parameters:
-  reposerver:
-    type: string
-    label: hands-on repository server
-    description: Teahcer will give the specific ip address.
-
 resources:
   wait_handle:
     type: OS::Heat::WaitConditionHandle
