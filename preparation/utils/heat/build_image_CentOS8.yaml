@@ -8,54 +8,7 @@ parameters:
     label: hands-on repository server
     description: Teahcer will give the specific ip address.
 
-  password:
-    type: string
-    label: Server password
-    description: You set your password on your instances. It will be used by user centos
-
 resources:
-  secg:
-    type: OS::Neutron::SecurityGroup
-    properties:
-      name: open-all
-      rules:
-        - protocol: icmp
-          remote_ip_prefix: 0.0.0.0/0
-        - protocol: tcp
-          port_range_min: 1
-          port_range_max: 65535
-          remote_ip_prefix: 0.0.0.0/0
-
-  private_network:
-    type: OS::Neutron::Net
-    properties:
-      name: work-net
-
-  private_subnet:
-    type: OS::Neutron::Subnet
-    properties:
-      name: work-subnet
-      ip_version: 4
-      network_id: { get_resource: private_network }
-      cidr: 192.168.199.0/24
-      gateway_ip: 192.168.199.254
-      dns_nameservers:
-        - 8.8.8.8
-        - 8.8.4.4
-
-  ext_router:
-    type: OS::Neutron::Router
-    properties:
-      name: Ext-Router
-      external_gateway_info:
-        network: public
-
-  router_interface:
-    type: OS::Neutron::RouterInterface
-    properties:
-      router_id: { get_resource: ext_router }
-      subnet_id: { get_resource: private_subnet }
-
   wait_handle:
     type: OS::Heat::WaitConditionHandle
 
@@ -66,20 +19,14 @@ resources:
       count: 1
       timeout: 3600
 
-  key_pair:
-    type: OS::Nova::KeyPair
-    properties:
-      name: key-for-console
-      save_private_key: true
-
   neutron-port:
     type: OS::Neutron::Port
     properties:
-      network: { get_resource: private_network }
+      network: build-net
       fixed_ips:
-        - ip_address: 192.168.199.250
+        - ip_address: 192.168.188.101
       security_groups:
-        - { get_resource: secg }
+        - open-all
 
   floating_ip:
     type: OS::Neutron::FloatingIP
@@ -97,9 +44,6 @@ resources:
     type: OS::Heat::CloudConfig
     properties:
       cloud_config:
-        password: { get_param: password }
-        chpasswd: { expire: False }
-        ssh_pwauth: True
         timezone: Asia/Tokyo
 
   config_set_reposerver:
@@ -109,6 +53,7 @@ resources:
         str_replace:
           params:
             __heat_reposerver_ip: { get_param: reposerver }
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
             REPOSERVER=__heat_reposerver_ip
@@ -116,8 +61,14 @@ resources:
             rm -rf /etc/yum.repos.d/CentOS-Linux-*
             curl -o /etc/yum.repos.d/edubase.repo http://${REPOSERVER}/repos/edubase.repo
             echo "${REPOSERVER} reposerver" >> /etc/hosts
+            if ping -c 1 reposerver &> /dev/null
+            then
+              echo connecting reposerver
+            else
+              __heat_wc_notify --data-binary '{"status": "FAILURE"}'
+              exit 1
+            fi
             dnf repolist
-
 
   config_init_config:
     type: OS::Heat::SoftwareConfig
@@ -125,8 +76,7 @@ resources:
       config:
         str_replace:
           params:
-            $_private_key_: { get_attr: [ key_pair, private_key ] }
-            $_public_key_: { get_attr: [ key_pair, public_key ] }
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
             echo "LANG=en_US.utf-8" > /etc/environment
@@ -169,24 +119,11 @@ resources:
   instance1:
     type: OS::Nova::Server
     properties:
-      name: handson-base-image
+      name: handson-image-CentOS8
       image: CentOS8-orig
       flavor: m1.tiny
-      key_name: { get_resource: key_pair }
+      key_name: key-for-build
       networks:
         - port: { get_resource: neutron-port }
       user_data_format: RAW
       user_data: { get_resource: server_init }
-      metadata:
-        reposerver: { get_param: reposerver }
-
-outputs:
-  console:
-    description: console server information
-    value:
-      name: { get_attr: [ instance1, name ] }
-      ip_address: { get_attr: [ neutron-port, fixed_ips, 0, ip_address ] }
-      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
-      password: { get_param: password }
-      private_key: { get_attr: [ key_pair, private_key ] }
-      reposerver: { get_param: reposerver }

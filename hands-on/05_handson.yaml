@@ -1,13 +1,8 @@
-heat_template_version: 2015-04-30
+heat_template_version: 2018-08-31
 
 description: 5th Hands-on Environment
 
 parameters:
-  reposerver:
-    type: string
-    label: hands-on repository server
-    description: Teahcer will gives the specific ip address.
-
   public_network:
     type: string
     label: Public network name or ID
@@ -36,10 +31,6 @@ parameters:
     type: string
     default: 192.168.199.30
 
-  ip2:
-    type: string
-    default: 192.168.199.40
-
 resources:
   wait_handle:
     type: OS::Heat::WaitConditionHandle
@@ -66,26 +57,6 @@ resources:
       security_groups:
         - { get_param: sec_group }
 
-  neutron-port2:
-    type: OS::Neutron::Port
-    properties:
-      network: { get_param: private_network }
-      fixed_ips:
-        - ip_address: { get_param: ip2 }
-      security_groups:
-        - { get_param: sec_group }
-
-  floating_ip2:
-    type: OS::Neutron::FloatingIP
-    properties:
-      floating_network: { get_param: public_network }
-
-  floating_ip_assoc2:
-    type: OS::Neutron::FloatingIPAssociation
-    properties:
-      floatingip_id: { get_resource: floating_ip2 }
-      port_id: { get_resource: neutron-port2 }
-
   passwd:
     type: OS::Heat::RandomString
     properties:
@@ -100,22 +71,6 @@ resources:
         chpasswd: { expire: False }
         ssh_pwauth: True
         timezone: Asia/Tokyo
-
-  config_set_repo:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config:
-        str_replace:
-          params:
-            __heat_reposerver_ip: { get_param: reposerver }
-          template: |
-            #!/bin/bash -ex
-            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
-            rm -f /etc/yum.repos.d/CentOS*
-            rm -f /etc/yum.repos.d/epel*
-            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
-            yum clean all
-            yum repolist
 
   config_init_config:
     type: OS::Heat::SoftwareConfig

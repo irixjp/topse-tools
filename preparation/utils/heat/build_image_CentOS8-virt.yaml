@@ -1,0 +1,91 @@
+heat_template_version: 2018-08-31
+
+description: Creating Handson image
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will give the specific ip address.
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 3600
+
+  neutron-port:
+    type: OS::Neutron::Port
+    properties:
+      network: build-net
+      fixed_ips:
+        - ip_address: 192.168.188.102
+      security_groups:
+        - open-all
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    depends_on: router_interface
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron-port }
+
+  config_init_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            dnf install -y wget crudini vim bash-completion qemu-kvm libvirt virt-manager virt-install jq
+            systemctl start libvirtd
+            virsh net-destroy default
+            virsh net-undefine default
+            systemctl restart libvirtd
+            yum groupinstall -y "Workstation"
+            systemctl set-default graphical.target
+            systemctl start openvswitch
+            dnf clean all
+
+  config_send_notify_after_settings:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            shutdown -h now
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_send_notify_after_settings }
+
+  instance1:
+    type: OS::Nova::Server
+    properties:
+      name: handson-image-CentOS8-virt
+      image: CentOS8
+      flavor: m1.tiny
+      key_name: key-for-build
+      networks:
+        - port: { get_resource: neutron-port }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }

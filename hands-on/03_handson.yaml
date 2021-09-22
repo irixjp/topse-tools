@@ -1,13 +1,8 @@
-heat_template_version: 2015-04-30
+heat_template_version: 2018-08-31
 
 description: 3rd Hands-on Environment
 
 parameters:
-  reposerver:
-    type: string
-    label: hands-on repository server
-    description: Teahcer will gives the specific ip address.
-
   public_network:
     type: string
     label: Public network name or ID
@@ -107,18 +102,13 @@ resources:
             __heat_reposerver_ip: { get_param: reposerver }
           template: |
             #!/bin/bash -ex
-            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
-            rm -f /etc/yum.repos.d/CentOS*
-            rm -f /etc/yum.repos.d/epel*
-            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
-            yum clean all
-            yum install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
+            dnf install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
             systemctl enable target.service
             systemctl start target.service
-            yum install -y iscsi-initiator-utils
+            dnf install -y iscsi-initiator-utils
             systemctl enable iscsid.service
             systemctl start iscsid.service
-            yum install -y httpd
+            dnf install -y httpd
             systemctl enable httpd.service
             systemctl start httpd.service
 
@@ -145,7 +135,7 @@ resources:
     type: OS::Nova::Server
     properties:
       name: handson3-srv1
-      image: CentOS7
+      image: CentOS8
       flavor: m1.medium
       key_name: { get_resource: key_pair }
       networks:
@@ -157,7 +147,7 @@ resources:
     type: OS::Nova::Server
     properties:
       name: handson3-srv2
-      image: CentOS7
+      image: CentOS8
       flavor: m1.medium
       key_name: { get_resource: key_pair }
       networks:

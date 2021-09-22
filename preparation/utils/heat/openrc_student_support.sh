@@ -1,4 +1,4 @@
-student_num=2836
+student_num=xxxx
 export OS_TENANT_NAME=tenant-${student_num}
 export OS_USERNAME=student-${student_num}
 export OS_PASSWORD=pass-${student_num}

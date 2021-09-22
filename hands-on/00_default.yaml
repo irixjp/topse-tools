@@ -132,7 +132,6 @@ resources:
             vim \
             crudini \
             bash-completion \
-            ansible \
             git
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
@@ -182,7 +181,7 @@ resources:
       user_data: { get_resource: server_init }
 
 outputs:
-  console_info:
+  info:
     description: console server information
     value:
       name: { get_attr: [ instance, name ] }

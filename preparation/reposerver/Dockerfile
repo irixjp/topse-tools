@@ -25,8 +25,9 @@ RUN REPOLIST=("epel" "epel-modular") && \
     dnf clean all
 
 RUN mkdir -p /var/www/html/images && \
-    curl -o /var/www/html/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2 https://cloud.centos.org/centos/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2 && \
-    curl -o /var/www/html/images/CentOS-8.3.2011-x86_64-minimal.iso http://ftp.iij.ad.jp/pub/linux/centos/8.3.2011/isos/x86_64/CentOS-8.3.2011-x86_64-minimal.iso && \
+    curl -L -o /var/www/html/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2 https://cloud.centos.org/centos/8/x86_64/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2 && \
+    curl -L -o /var/www/html/images/CentOS-8.3.2011-x86_64-minimal.iso http://ftp.iij.ad.jp/pub/linux/centos/8.3.2011/isos/x86_64/CentOS-8.3.2011-x86_64-minimal.iso && \
+    curl -L -o /var/www/html/images/cirros-0.5.2-x86_64-disk.img http://download.cirros-cloud.net/0.5.2/cirros-0.5.2-x86_64-disk.img && \
     chmod -R 755 /var/www/html/images
 
 COPY edubase.repo /var/www/html/repos/edubase.repo
