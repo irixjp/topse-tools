@@ -36,7 +36,7 @@ COPY --chown=jupyter:jupyter assets/.jupyter /jupyter/.jupyter
 COPY --chown=jupyter:jupyter assets/.ansible.cfg /jupyter/.ansible.cfg
 
 RUN echo "alias ls='ls --color'" >> /jupyter/.bashrc  && \
-    echo "alias ll='ls -alF --color'" >> /jupyter/.bashrc && \
+    echo "alias ll='ls -alF --color'" >> /jupyter/.bashrc
 
 EXPOSE 8888
 CMD ["jupyter", "lab", "--ip", "0.0.0.0", "--port", "8888", "--no-browser"]
