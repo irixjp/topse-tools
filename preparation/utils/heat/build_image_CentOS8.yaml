@@ -55,6 +55,7 @@ resources:
             __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
+            sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
             REPOSERVER=__heat_reposerver_ip
             dnf clean all
             rm -rf /etc/yum.repos.d/CentOS-Linux-*
