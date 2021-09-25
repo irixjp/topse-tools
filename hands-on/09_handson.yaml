@@ -68,7 +68,7 @@ resources:
       ip_version: 4
       network_id: { get_resource: internal_network }
       cidr: 10.20.20.0/24
-      gateway_ip: 10.20.20.254
+      gateway_ip: ""
       enable_dhcp: True
 
   external_subnet:
@@ -111,7 +111,7 @@ resources:
       security_groups:
         - open-all
 
- neutron_port_os_eth2:
+  neutron_port_os_eth2:
     type: OS::Neutron::Port
     properties:
       network: { get_resource: external_network }
@@ -175,6 +175,10 @@ resources:
         chmod 600 /root/.ssh/authorized_keys
         systemctl restart sshd
 
+        ifdown eth0
+        ifdown eth1
+        ifdown eth2
+
         cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
         DEVICE=eth0
         TYPE=Ethernet
@@ -196,12 +200,10 @@ resources:
         BOOTPROTO=none
         EOF
 
-        ifdown eth0
-        ifdown eth1
-        ifdown eth2
         ifup eth0
         ifup eth1
         ifup eth2
+        sleep 5
 
 
   config_packstack:
