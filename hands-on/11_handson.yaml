@@ -10,14 +10,14 @@ parameters:
     default: password
 
 resources:
-  wait_handle:
+  wait_handle_init:
     type: OS::Heat::WaitConditionHandle
 
-  wait_condition:
+  wait_condition_init:
     type: OS::Heat::WaitCondition
     properties:
-      handle: { get_resource: wait_handle }
-      count: 6
+      handle: { get_resource: wait_handle_init }
+      count: 3
       timeout: 1800
 
   wait_handle_after_reboot:
@@ -36,77 +36,143 @@ resources:
       name: handson11-key
       save_private_key: true
 
-  floating_network:
+  management_network:
     type: OS::Neutron::Net
     properties:
-      name: floating-net
+      name: management
 
-  floating_subnet:
+  internal_network:
+    type: OS::Neutron::Net
+    properties:
+      name: internal
+
+  external_network:
+    type: OS::Neutron::Net
+    properties:
+      name: external
+
+  management_subnet:
     type: OS::Neutron::Subnet
     properties:
-      name: floating-subnet
+      name: management-subnet
       ip_version: 4
-      network_id: { get_resource: floating_network }
-      cidr: 172.16.100.0/24
-      gateway_ip: 172.16.100.254
+      network_id: { get_resource: management_network }
+      cidr: 10.10.10.0/24
+      gateway_ip: 10.10.10.254
+      enable_dhcp: True
+
+  internal_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: internal-subnet
+      ip_version: 4
+      network_id: { get_resource: internal_network }
+      cidr: 10.20.20.0/24
+      gateway_ip: ""
+      enable_dhcp: True
+
+  external_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: external-subnet
+      ip_version: 4
+      network_id: { get_resource: external_network }
+      cidr: 10.30.30.0/24
+      gateway_ip: 10.30.30.254
       enable_dhcp: False
 
-  router_interface:
+  router_interface_management:
     type: OS::Neutron::RouterInterface
     properties:
       router: Ext-Router
-      subnet: { get_resource: floating_subnet }
+      subnet: { get_resource: management_subnet }
+
+  router_interface_external:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: Ext-Router
+      subnet: { get_resource: external_subnet }
 
   neutron_port_cc_eth0:
     type: OS::Neutron::Port
     properties:
-      network: work-net
+      network: { get_resource: management_network }
       fixed_ips:
-        - ip_address: 192.168.199.200
+        - ip_address: 10.10.10.200
       security_groups:
         - open-all
 
   neutron_port_cc_eth1:
     type: OS::Neutron::Port
     properties:
-      network: { get_resource: floating_network }
+      network: { get_resource: internal_network }
       fixed_ips:
-        - ip_address: 172.16.100.200
-        - ip_address: 172.16.100.201
-        - ip_address: 172.16.100.202
-        - ip_address: 172.16.100.203
-        - ip_address: 172.16.100.204
+        - ip_address: 10.20.20.200
       security_groups:
         - open-all
 
-  neutron_port_node1_eth0:
+  neutron_port_cc_eth2:
     type: OS::Neutron::Port
     properties:
-      network: work-net
+      network: { get_resource: external_network }
       fixed_ips:
-        - ip_address: 192.168.199.201
+        - ip_address: 10.30.30.200
       security_groups:
         - open-all
 
-  neutron_port_node2_eth0:
+  neutron_port_com1_eth0:
     type: OS::Neutron::Port
     properties:
-      network: work-net
+      network: { get_resource: management_network }
       fixed_ips:
-        - ip_address: 192.168.199.202
+        - ip_address: 10.10.10.201
       security_groups:
         - open-all
 
-  floating_ip:
-    type: OS::Neutron::FloatingIP
+  neutron_port_com1_eth1:
+    type: OS::Neutron::Port
     properties:
-      floating_network: public
+      network: { get_resource: internal_network }
+      fixed_ips:
+        - ip_address: 10.20.20.201
+      security_groups:
+        - open-all
 
-  floating_ip_assoc:
-    type: OS::Neutron::FloatingIPAssociation
+  neutron_port_com1_eth2:
+    type: OS::Neutron::Port
     properties:
-      floatingip_id: { get_resource: floating_ip }
-      port_id: { get_resource: neutron_port_cc_eth0 }
+      network: { get_resource: external_network }
+      fixed_ips:
+        - ip_address: 10.30.30.201
+      security_groups:
+        - open-all
+
+  neutron_port_com2_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: management_network }
+      fixed_ips:
+        - ip_address: 10.10.10.202
+      security_groups:
+        - open-all
+
+  neutron_port_com2_eth1:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: internal_network }
+      fixed_ips:
+        - ip_address: 10.20.20.202
+      security_groups:
+        - open-all
+
+  neutron_port_com2_eth2:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: external_network }
+      fixed_ips:
+        - ip_address: 10.30.30.202
+      security_groups:
+        - open-all
 
   config_set_passwd:
     type: OS::Heat::CloudConfig
@@ -117,34 +183,111 @@ resources:
         ssh_pwauth: True
         timezone: Asia/Tokyo
 
-  config_send_notify:
+  config_send_notify_init:
     type: OS::Heat::SoftwareConfig
     properties:
       config:
         str_replace:
           params:
-            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+            $__heat_wc_notify: { get_attr: ['wait_handle_init', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
-            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_send_notify_after_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $__heat_wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            cat << EOF >> /etc/rc.d/rc.local
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            EOF
+            chmod u+x /etc/rc.d/rc.local
+
+  config_init_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $_private_key_: { get_attr: [ key_pair, private_key ] }
+            $_public_key_: { get_attr: [ key_pair, public_key ] }
+          template: |
+            #!/bin/bash -ex
+            echo "$_private_key_" > /home/centos/.ssh/id_rsa
+            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
+            chown centos:centos /home/centos/.ssh/id_rsa
+            chown centos:centos /home/centos/.ssh/id_rsa.pub
+            chmod 600 /home/centos/.ssh/id_rsa
+            chmod 644 /home/centos/.ssh/id_rsa.pub
+
+            echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+            sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+            rm -f /root/.ssh/authorized_keys
+            cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            cp /home/centos/.ssh/id_rsa /root/.ssh/id_rsa
+            cp /home/centos/.ssh/id_rsa.pub /root/.ssh/id_rsa
+            chmod 600 /root/.ssh/id_rsa
+            chmod 644 /root/.ssh/id_rsa.pub
+            systemctl restart sshd
+
+            ifdown eth0
+            ifdown eth1
+            ifdown eth2
+
+            cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
+            DEVICE=eth0
+            TYPE=Ethernet
+            ONBOOT=yes
+            BOOTPROTO=dhcp
+            EOF
+
+            cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth1
+            DEVICE=eth1
+            TYPE=Ethernet
+            ONBOOT=yes
+            BOOTPROTO=dhcp
+            EOF
+
+            cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth2
+            DEVICE=eth2
+            TYPE=Etherne
+            ONBOOT=yes
+            BOOTPROTO=none
+            EOF
+
+            ifup eth0
+            ifup eth1
+            ifup eth2
+            sleep 5
 
   server_init:
     type: OS::Heat::MultipartMime
     properties:
       parts:
       - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_send_notify }
+      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_send_notify_init }
+      - config: { get_resource: config_send_notify_after_reboot }
 
   instance_openstack_cc:
     type: OS::Nova::Server
     properties:
       name: handson11-openstack-cc
-      image: CentOS7
+      image: CentOS8
       flavor: m1.large
       key_name: { get_resource: key_pair }
       networks:
         - port: { get_resource: neutron_port_cc_eth0 }
         - port: { get_resource: neutron_port_cc_eth1 }
+        - port: { get_resource: neutron_port_cc_eth2 }
       user_data_format: RAW
       user_data: { get_resource: server_init }
 
@@ -152,11 +295,13 @@ resources:
     type: OS::Nova::Server
     properties:
       name: handson11-openstack-node1
-      image: CentOS7
+      image: CentOS8
       flavor: m1.large
       key_name: { get_resource: key_pair }
       networks:
-        - port: { get_resource: neutron_port_node1_eth0 }
+        - port: { get_resource: neutron_port_com1_eth0 }
+        - port: { get_resource: neutron_port_com1_eth1 }
+        - port: { get_resource: neutron_port_com1_eth2 }
       user_data_format: RAW
       user_data: { get_resource: server_init }
 
@@ -164,11 +309,13 @@ resources:
     type: OS::Nova::Server
     properties:
       name: handson11-openstack-node2
-      image: CentOS7
+      image: CentOS8
       flavor: m1.large
       key_name: { get_resource: key_pair }
       networks:
-        - port: { get_resource: neutron_port_node2_eth0 }
+        - port: { get_resource: neutron_port_com2_eth0 }
+        - port: { get_resource: neutron_port_com2_eth1 }
+        - port: { get_resource: neutron_port_com2_eth2 }
       user_data_format: RAW
       user_data: { get_resource: server_init }
 
@@ -184,14 +331,14 @@ outputs:
     description: server information
     value:
       name: { get_attr: [ instance_openstack_node1, name ] }
-      ip_address: { get_attr: [ neutron_port_node1_eth0, fixed_ips, 0, ip_address ] }
+      ip_address: { get_attr: [ neutron_port_com1_eth0, fixed_ips, 0, ip_address ] }
       floating_ip: ""
 
   instance3:
     description: server information
     value:
       name: { get_attr: [ instance_openstack_node2, name ] }
-      ip_address: { get_attr: [ neutron_port_node2_eth0, fixed_ips, 0, ip_address ] }
+      ip_address: { get_attr: [ neutron_port_com2_eth0, fixed_ips, 0, ip_address ] }
       floating_ip: ""
 
   password:
