@@ -24,9 +24,7 @@ function exec_get_info () {
 
 COMMANDS=(
   "ovs-vsctl show"
-  "ovs-ofctl show br-ex"
   "ovs-ofctl show br-int"
-  "ovs-ofctl dump-flows br-ex"
   "ovs-ofctl dump-flows br-int"
   )
 
