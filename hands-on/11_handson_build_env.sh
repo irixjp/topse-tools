@@ -23,11 +23,10 @@ sleep 3 && ./ovn_exec_and_take_results.sh create_public_network > /dev/null
 openstack subnet create public-subnet --network public --ip-version 4 --subnet-range 10.30.30.0/24 --gateway 10.30.30.254 --no-dhcp --allocation-pool start=10.30.30.210,end=10.30.30.230
 sleep 3 && ./ovn_exec_and_take_results.sh create_public_subnet > /dev/null
 
-openstack role create student
-
 curl -O http://reposerver/images/cirros-0.5.2-x86_64-disk.img
 openstack image create --container-format bare --disk-format qcow2 --min-disk 1 --min-ram 1024 --public --file cirros-0.5.2-x86_64-disk.img cirros
 
+openstack role create student
 
 for i in 001 002
 do
