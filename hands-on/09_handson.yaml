@@ -17,7 +17,7 @@ resources:
     type: OS::Heat::WaitCondition
     properties:
       handle: { get_resource: wait_handle }
-      count: 4
+      count: 3
       timeout: 1800
 
   wait_handle_after_reboot:
@@ -135,10 +135,10 @@ resources:
       config:
         str_replace:
           params:
-            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+            $__heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
-            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
 
   config_send_notify_after_reboot:
     type: OS::Heat::SoftwareConfig
@@ -146,11 +146,11 @@ resources:
       config:
         str_replace:
           params:
-            __heat_wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
+            $__heat_wc_notify: { get_attr: ['wait_handle_after_reboot', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
             cat << EOF >> /etc/rc.d/rc.local
-            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
             EOF
             chmod u+x /etc/rc.d/rc.local
 
