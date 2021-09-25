@@ -31,6 +31,15 @@ unset OS_IDENTITY_API_VERSION
 
 STUDENT_NUM=001
 cat << EOF > openrc_student001
+unset OS_USERNAME
+unset OS_PASSWORD
+unset OS_REGION_NAME
+unset OS_AUTH_URL
+unset OS_PROJECT_NAME
+unset OS_USER_DOMAIN_NAME
+unset OS_PROJECT_DOMAIN_NAME
+unset OS_IDENTITY_API_VERSION
+
 export OS_AUTH_URL=http://10.10.10.200:5000/v3
 export OS_PROJECT_NAME="tenant-${STUDENT_NUM}"
 export OS_USERNAME="student-${STUDENT_NUM}"
@@ -40,10 +49,20 @@ export OS_USER_DOMAIN_NAME="Default"
 export OS_PROJECT_DOMAIN_ID="default"
 export OS_INTERFACE=public
 export OS_IDENTITY_API_VERSION=3
+export PS1='[\u@\h \W(student-001)]\$ '
 EOF
 
 STUDENT_NUM=002
 cat << EOF > openrc_student002
+unset OS_USERNAME
+unset OS_PASSWORD
+unset OS_REGION_NAME
+unset OS_AUTH_URL
+unset OS_PROJECT_NAME
+unset OS_USER_DOMAIN_NAME
+unset OS_PROJECT_DOMAIN_NAME
+unset OS_IDENTITY_API_VERSION
+
 export OS_AUTH_URL=http://10.10.10.200:5000/v3
 export OS_PROJECT_NAME="tenant-${STUDENT_NUM}"
 export OS_USERNAME="student-${STUDENT_NUM}"
@@ -53,6 +72,7 @@ export OS_USER_DOMAIN_NAME="Default"
 export OS_PROJECT_DOMAIN_ID="default"
 export OS_INTERFACE=public
 export OS_IDENTITY_API_VERSION=3
+export PS1='[\u@\h \W(student-002)]\$ '
 EOF
 
 ### student001
@@ -63,9 +83,7 @@ openstack security group rule create open-all --protocol udp --dst-port 1:65535 
 openstack security group rule create open-all --protocol icmp --remote-ip 0.0.0.0/0
 
 openstack router create Ext-Router
-
-PUB_SUBNET_ID=`openstack subnet list --name public-subnet -c ID -f value`
-openstack router set Ext-Router --external-gateway public --fixed-ip subnet=${PUB_SUBNET_ID:?},ip-address=10.30.30.211
+openstack router set Ext-Router --external-gateway public
 
 openstack network create work-net
 openstack subnet create work-subnet --network work-net --ip-version 4 --subnet-range 10.99.99.0/24 --gateway 10.99.99.254 --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4
@@ -85,9 +103,7 @@ openstack security group rule create open-all --protocol udp --dst-port 1:65535 
 openstack security group rule create open-all --protocol icmp --remote-ip 0.0.0.0/0
 
 openstack router create Ext-Router
-
-PUB_SUBNET_ID=`openstack subnet list --name public-subnet -c ID -f value`
-openstack router set Ext-Router --external-gateway public --fixed-ip subnet=${PUB_SUBNET_ID:?},ip-address=10.30.30.212
+openstack router set Ext-Router --external-gateway public
 
 openstack network create work-net
 openstack subnet create work-subnet --network work-net --ip-version 4 --subnet-range 10.99.99.0/24 --gateway 10.99.99.254 --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4
@@ -98,5 +114,4 @@ openstack router add subnet Ext-Router work-subnet
 
 openstack keypair create key-student002 | key-student002.pem
 chmod 600 key-student002.pem
-
 
