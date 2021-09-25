@@ -12,11 +12,11 @@ openstack flavor create --public --id 99 --vcpus 1 --ram 1024 --disk 10 --epheme
 
 # public network
 openstack network create public --external --provider-network-type flat --provider-physical-network extnet
-sleep 3 && ./ovn_get_state_cc.sh initial_state create_public_network
+sleep 3 && ./ovn_get_state_cc.sh create_public_network
 
 # public subnet
 openstack subnet create public-subnet --network public --ip-version 4 --subnet-range 10.30.30.0/24 --gateway 10.30.30.254 --no-dhcp --allocation-pool start=10.30.30.160,end=10.30.30.180
-sleep 3 && ./ovn_get_state_cc.sh initial_state create_public_subnet
+sleep 3 && ./ovn_get_state_cc.sh create_public_subnet
 
 # image
 curl -O http://reposerver/images/cirros-0.5.2-x86_64-disk.img
@@ -168,6 +168,7 @@ sleep 3 && ./ovn_get_state_cc.sh assoc_fip_${FIP2:?}
 # output
 openstack server list
 openstack image list
+openstack flavor list
 openstack network list
 openstack subnet list
 openstack router list

@@ -37,9 +37,11 @@ openstack router delete Closed-Router
 openstack security group delete open-all
 
 openstack image delete cirros
+openstack flavor delete my.standard
 
 openstack server list
 openstack image list
+openstack flavor list
 openstack network list
 openstack subnet list
 openstack router list
