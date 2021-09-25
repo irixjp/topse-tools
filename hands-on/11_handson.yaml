@@ -208,7 +208,14 @@ resources:
             EOF
             chmod u+x /etc/rc.d/rc.local
 
-  config_init_config:
+  config_reboot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        reboot
+
+  config_init:
     type: OS::Heat::SoftwareConfig
     properties:
       config:
@@ -233,7 +240,7 @@ resources:
             cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
             chmod 600 /root/.ssh/authorized_keys
             cp /home/centos/.ssh/id_rsa /root/.ssh/id_rsa
-            cp /home/centos/.ssh/id_rsa.pub /root/.ssh/id_rsa
+            cp /home/centos/.ssh/id_rsa.pub /root/.ssh/id_rsa.pub
             chmod 600 /root/.ssh/id_rsa
             chmod 644 /root/.ssh/id_rsa.pub
             systemctl restart sshd
@@ -273,9 +280,10 @@ resources:
     properties:
       parts:
       - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_init }
       - config: { get_resource: config_send_notify_init }
       - config: { get_resource: config_send_notify_after_reboot }
+      - config: { get_resource: config_reboot }
 
   instance_openstack_cc:
     type: OS::Nova::Server
