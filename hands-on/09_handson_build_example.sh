@@ -38,7 +38,8 @@ sleep 3 && ./ovn_get_state_cc.sh create_ext_router
 openstack router create Closed-Router
 sleep 3 && ./ovn_get_state_cc.sh create_closed_router
 
-openstack router set Ext-Router --external-gateway public
+PUB_SUBNET_ID=`openstack subnet list --name public-subnet -c ID -f value`
+openstack router set Ext-Router --external-gateway public --fixed-ip subnet=${PUB_SUBNET_ID:?},ip-address=10.30.30.160
 sleep 3 && ./ovn_get_state_cc.sh connect_ext_router_to_public
 
 # internal network
@@ -153,8 +154,6 @@ do
 done
 sleep 3 && ./ovn_get_state_cc.sh create_test_vm_3
 
-openstack server list
-
 # floating ip
 FIP1=`openstack floating ip create public -f json | jq -r .floating_ip_address`
 sleep 3 && ./ovn_get_state_cc.sh create_fip_${FIP1:?}
@@ -168,13 +167,16 @@ sleep 3 && ./ovn_get_state_cc.sh assoc_fip_${FIP2:?}
 
 # output
 openstack server list
+openstack image list
 openstack network list
 openstack subnet list
 openstack router list
+openstack security group list
+openstack security group rule list
 openstack volume list
 openstack volume snapshot list
+openstack port list
 
-echo "##########"
-echo "## done ##"
-echo "##########"
+echo "### done ###"
+
 
