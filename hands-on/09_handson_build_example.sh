@@ -1,3 +1,5 @@
+#!/bin/bash -ex
+
 function get_uuid () { cat - | grep " id " | awk '{print $4}'; }
 
 function wait_instance () {

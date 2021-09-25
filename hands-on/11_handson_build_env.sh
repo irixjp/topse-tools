@@ -1,11 +1,27 @@
 #!/bin/bash -ex
 
+curl -O reposerver/hands-on/ovn_exec_and_take_results.sh
+curl -O reposerver/hands-on/ovn_get_state_cc.sh
+curl -O reposerver/hands-on/ovn_get_state_com.sh
+
+chmod +x ovn_exec_and_take_results.sh
+chmod +x ovn_get_state_cc.sh
+chmod +x ovn_get_state_com.sh
+
+scp -p ovn_get_state_com.sh root@10.10.10.201:/root
+scp -p ovn_get_state_com.sh root@10.10.10.202:/root
+
+./ovn_exec_and_take_results.sh initial_state
+
 source keystonerc_admin
 
 openstack flavor create --public --id 99 --vcpus 1 --ram 1024 --disk 10 --ephemeral 0 --swap 0 my.standard
 
 openstack network create public --external --provider-network-type flat --provider-physical-network extnet
+./ovn_exec_and_take_results.sh create_public_network
+
 openstack subnet create public-subnet --network public --ip-version 4 --subnet-range 10.30.30.0/24 --gateway 10.30.30.254 --no-dhcp --allocation-pool start=10.30.30.210,end=10.30.30.230
+./ovn_exec_and_take_results.sh create_public_subnet
 
 openstack role create student
 
@@ -79,19 +95,28 @@ EOF
 ### student001
 source openrc_student001
 openstack security group create --description "allow all communications" open-all
+./ovn_exec_and_take_results.sh create_secgrp_001
 openstack security group rule create open-all --protocol tcp --dst-port 1:65535 --remote-ip 0.0.0.0/0
+./ovn_exec_and_take_results.sh add_tcp_rules_001
 openstack security group rule create open-all --protocol udp --dst-port 1:65535 --remote-ip 0.0.0.0/0
+./ovn_exec_and_take_results.sh add_udp_rules_001
 openstack security group rule create open-all --protocol icmp --remote-ip 0.0.0.0/0
+./ovn_exec_and_take_results.sh add_icmp_rule_001
 
 openstack router create Ext-Router
+./ovn_exec_and_take_results.sh create_ext_router_001
 openstack router set Ext-Router --external-gateway public
+./ovn_exec_and_take_results.sh connect_ext_router_to_public_001
 
 openstack network create work-net
+./ovn_exec_and_take_results.sh create_work_net_001
 openstack subnet create work-subnet --network work-net --ip-version 4 --subnet-range 10.99.99.0/24 --gateway 10.99.99.254 --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4
+./ovn_exec_and_take_results.sh create_work_subnet_001
 openstack network list
 openstack subnet list
 
 openstack router add subnet Ext-Router work-subnet
+./ovn_exec_and_take_results.sh connect_ext_router_to_work_net_001
 
 openstack keypair create key-student001 | tee key-student001.pem
 chmod 600 key-student001.pem
@@ -99,19 +124,28 @@ chmod 600 key-student001.pem
 ### student002
 source openrc_student002
 openstack security group create --description "allow all communications" open-all
+./ovn_exec_and_take_results.sh create_secgrp_002
 openstack security group rule create open-all --protocol tcp --dst-port 1:65535 --remote-ip 0.0.0.0/0
+./ovn_exec_and_take_results.sh add_tcp_rules_002
 openstack security group rule create open-all --protocol udp --dst-port 1:65535 --remote-ip 0.0.0.0/0
+./ovn_exec_and_take_results.sh add_udp_rules_002
 openstack security group rule create open-all --protocol icmp --remote-ip 0.0.0.0/0
+./ovn_exec_and_take_results.sh add_icmp_rule_002
 
 openstack router create Ext-Router
+./ovn_exec_and_take_results.sh create_ext_router_002
 openstack router set Ext-Router --external-gateway public
+./ovn_exec_and_take_results.sh connect_ext_router_to_public_002
 
 openstack network create work-net
+./ovn_exec_and_take_results.sh create_work_net_002
 openstack subnet create work-subnet --network work-net --ip-version 4 --subnet-range 10.99.99.0/24 --gateway 10.99.99.254 --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4
+./ovn_exec_and_take_results.sh create_work_subnet_002
 openstack network list
 openstack subnet list
 
 openstack router add subnet Ext-Router work-subnet
+./ovn_exec_and_take_results.sh connect_ext_router_to_work_net_002
 
 openstack keypair create key-student002 | tee key-student002.pem
 chmod 600 key-student002.pem
