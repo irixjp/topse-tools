@@ -51,9 +51,9 @@ crudini --set /etc/nova/nova.conf vnc enabled true
 crudini --set /etc/nova/nova.conf vnc novncproxy_base_url http://10.10.10.200:6080/vnc_auto.html
 crudini --set /etc/nova/nova.conf vnc server_listen 0.0.0.0
 crudini --set /etc/nova/nova.conf vnc keymap ja
-crudini --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32
-crudini --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 16
-crudini --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 12
+crudini --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 16
+crudini --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 1.5
+crudini --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 3
 crudini --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
 crudini --set /etc/nova/nova.conf vnc server_proxyclient_address 10.10.10.200
 

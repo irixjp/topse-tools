@@ -18,6 +18,7 @@ do
     openstack project create tenant-${i}
     openstack user create --project tenant-${i} --password pass-${i} student-${i}
     openstack role add --user student-${i} --project tenant-${i} student
+    openstack quota set --instances 50 --cores 512 --ram 512000 tenant-${i}
 done
 
 unset OS_USERNAME
