@@ -92,7 +92,7 @@ openstack subnet list
 
 openstack router add subnet Ext-Router work-subnet
 
-openstack keypair create key-student001 | key-student001.pem
+openstack keypair create key-student001 | tee key-student001.pem
 chmod 600 key-student001.pem
 
 ### student002
@@ -112,6 +112,6 @@ openstack subnet list
 
 openstack router add subnet Ext-Router work-subnet
 
-openstack keypair create key-student002 | key-student002.pem
+openstack keypair create key-student002 | tee key-student002.pem
 chmod 600 key-student002.pem
 
