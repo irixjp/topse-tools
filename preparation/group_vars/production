@@ -2,3 +2,6 @@
 tunn_nic: eno2
 cinder_size: 500G
 swift_size: 200G
+reposerver_ip: 157.1.141.22
+password: password
+ansible_key_pub: "{{ lookup('file', 'utils/ansible_key.pub') }}"
