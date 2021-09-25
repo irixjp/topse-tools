@@ -212,7 +212,7 @@ resources:
       config: |
         #!/bin/bash -ex
         dnf install -y openstack-packstack
-
+        export HOME=/root
         packstack --dry-run --allinone --default-password=password --provision-demo=n --gen-answer-file /root/openstack-answer.txt
 
         crudini --set /root/openstack-answer.txt general CONFIG_NOVA_INSTALL y
