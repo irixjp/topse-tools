@@ -325,21 +325,18 @@ outputs:
     value:
       name: { get_attr: [ instance_openstack_cc, name ] }
       ip_address: { get_attr: [ neutron_port_cc_eth0, fixed_ips, 0, ip_address ] }
-      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
 
   instance2:
     description: server information
     value:
       name: { get_attr: [ instance_openstack_node1, name ] }
       ip_address: { get_attr: [ neutron_port_com1_eth0, fixed_ips, 0, ip_address ] }
-      floating_ip: ""
 
   instance3:
     description: server information
     value:
       name: { get_attr: [ instance_openstack_node2, name ] }
       ip_address: { get_attr: [ neutron_port_com2_eth0, fixed_ips, 0, ip_address ] }
-      floating_ip: ""
 
   password:
     description: server password for user "centos"
