@@ -1,5 +1,6 @@
 #!/bin/bash -ex
 
+# showing ovn state script
 curl -O reposerver/hands-on/ovn_get_state_cc.sh
 chmod +x ovn_get_state_cc.sh
 
@@ -155,9 +156,9 @@ done
 sleep 3 && ./ovn_get_state_cc.sh create_test_vm_3
 
 # floating ip
-FIP1=`openstack floating ip create public -f json | jq -r .floating_ip_address`
+FIP1=`openstack floating ip create public  --floating-ip-address 10.30.30.171 -f json | jq -r .floating_ip_address`
 sleep 3 && ./ovn_get_state_cc.sh create_fip_${FIP1:?}
-FIP2=`openstack floating ip create public -f json | jq -r .floating_ip_address`
+FIP2=`openstack floating ip create public  --floating-ip-address 10.30.30.172 -f json | jq -r .floating_ip_address`
 sleep 3 && ./ovn_get_state_cc.sh create_fip_${FIP2:?}
 
 openstack server add floating ip test-vm-1 ${FIP1:?}

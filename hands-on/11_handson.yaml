@@ -290,7 +290,7 @@ resources:
     properties:
       name: handson11-openstack-cc
       image: CentOS8
-      flavor: m1.large
+      flavor: m1.xlarge
       key_name: { get_resource: key_pair }
       networks:
         - port: { get_resource: neutron_port_cc_eth0 }

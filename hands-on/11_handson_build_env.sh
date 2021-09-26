@@ -1,5 +1,6 @@
 #!/bin/bash -ex
 
+# showing ovn state scripts
 curl -O reposerver/hands-on/ovn_exec_and_take_results.sh
 curl -O reposerver/hands-on/ovn_get_state_cc.sh
 curl -O reposerver/hands-on/ovn_get_state_com.sh
@@ -15,17 +16,21 @@ sleep 3 && ./ovn_exec_and_take_results.sh initial_state > /dev/null
 
 source keystonerc_admin
 
+# flavor
 openstack flavor create --public --id 99 --vcpus 1 --ram 1024 --disk 10 --ephemeral 0 --swap 0 my.standard
 
+# public network
 openstack network create public --external --provider-network-type flat --provider-physical-network extnet
 sleep 3 && ./ovn_exec_and_take_results.sh create_public_network > /dev/null
 
 openstack subnet create public-subnet --network public --ip-version 4 --subnet-range 10.30.30.0/24 --gateway 10.30.30.254 --no-dhcp --allocation-pool start=10.30.30.210,end=10.30.30.230
 sleep 3 && ./ovn_exec_and_take_results.sh create_public_subnet > /dev/null
 
+# image
 curl -O http://reposerver/images/cirros-0.5.2-x86_64-disk.img
 openstack image create --container-format bare --disk-format qcow2 --min-disk 1 --min-ram 1024 --public --file cirros-0.5.2-x86_64-disk.img cirros
 
+# role and user
 openstack role create student
 
 for i in 001 002
@@ -45,6 +50,8 @@ unset OS_USER_DOMAIN_NAME
 unset OS_PROJECT_DOMAIN_NAME
 unset OS_IDENTITY_API_VERSION
 
+
+# openrc
 STUDENT_NUM=001
 cat << EOF > openrc_student001
 unset OS_USERNAME
