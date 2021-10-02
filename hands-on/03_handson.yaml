@@ -96,21 +96,17 @@ resources:
   config_init_config:
     type: OS::Heat::SoftwareConfig
     properties:
-      config:
-        str_replace:
-          params:
-            __heat_reposerver_ip: { get_param: reposerver }
-          template: |
-            #!/bin/bash -ex
-            dnf install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
-            systemctl enable target.service
-            systemctl start target.service
-            dnf install -y iscsi-initiator-utils
-            systemctl enable iscsid.service
-            systemctl start iscsid.service
-            dnf install -y httpd
-            systemctl enable httpd.service
-            systemctl start httpd.service
+      config: |
+        #!/bin/bash -ex
+        dnf install -y wget crudini vim bash-completion lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
+        systemctl enable target.service
+        systemctl start target.service
+        dnf install -y iscsi-initiator-utils
+        systemctl enable iscsid.service
+        systemctl start iscsid.service
+        dnf install -y httpd
+        systemctl enable httpd.service
+        systemctl start httpd.service
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
