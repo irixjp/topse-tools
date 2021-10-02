@@ -72,23 +72,6 @@ resources:
         ssh_pwauth: True
         timezone: Asia/Tokyo
 
-  config_init_config:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      config: |
-        #!/bin/bash -ex
-        yum update -y
-        rm -f /etc/yum.repos.d/CentOS*
-        rm -f /etc/yum.repos.d/epel*
-        yum clean all
-        yum install -y wget crudini vim bash-completion qemu-kvm libvirt virt-manager virt-install
-        systemctl start libvirtd
-        virsh net-destroy default
-        virsh net-undefine default
-        systemctl restart libvirtd
-        yum groupinstall -y "GNOME Desktop"
-        systemctl set-default graphical.target
-
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -106,23 +89,13 @@ resources:
     properties:
       parts:
       - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_set_repo }
-      - config: { get_resource: config_init_config }
-      - config: { get_resource: config_send_notify_after_settings }
-
-  server_init2:
-    type: OS::Heat::MultipartMime
-    properties:
-      parts:
-      - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_set_repo }
       - config: { get_resource: config_send_notify_after_settings }
 
   instance1:
     type: OS::Nova::Server
     properties:
       name: handson5-virt
-      image: CentOS7
+      image: CentOS8-virt
       flavor: m1.large
       key_name: { get_resource: key_pair }
       networks:
@@ -130,31 +103,12 @@ resources:
       user_data_format: RAW
       user_data: { get_resource: server_init1 }
 
-  instance2:
-    type: OS::Nova::Server
-    properties:
-      name: handson5-docker
-      image: Docker
-      flavor: m1.small
-      key_name: { get_resource: key_pair }
-      networks:
-        - port: { get_resource: neutron-port2 }
-      user_data_format: RAW
-      user_data: { get_resource: server_init2 }
-
 outputs:
   instance1:
     description: server information
     value:
       name: { get_attr: [ instance1, name ] }
       ip_address: { get_attr: [ neutron-port1, fixed_ips, 0, ip_address ] }
-      floating_ip: ""
-  instance2:
-    description: server information
-    value:
-      name: { get_attr: [ instance2, name ] }
-      ip_address: { get_attr: [ neutron-port2, fixed_ips, 0, ip_address ] }
-      floating_ip: { get_attr: [floating_ip2, floating_ip_address] }
   password:
     description: server password for user "centos"
     value: { get_attr: [ passwd, value] }
