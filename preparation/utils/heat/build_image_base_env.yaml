@@ -6,7 +6,7 @@ resources:
   secg:
     type: OS::Neutron::SecurityGroup
     properties:
-      name: open-all
+      name: build-open-all
       rules:
         - protocol: icmp
           remote_ip_prefix: 0.0.0.0/0

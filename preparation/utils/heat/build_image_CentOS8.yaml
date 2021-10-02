@@ -26,7 +26,7 @@ resources:
       fixed_ips:
         - ip_address: 192.168.188.101
       security_groups:
-        - open-all
+        - buil-open-all
 
   floating_ip:
     type: OS::Neutron::FloatingIP
