@@ -43,12 +43,12 @@ resources:
           template: |
             #!/bin/bash -ex
             dnf install -y wget crudini vim bash-completion qemu-kvm libvirt virt-manager virt-install jq
+            systemctl enable libvirtd
             systemctl start libvirtd
-            virsh net-destroy default
             virsh net-undefine default
             systemctl restart libvirtd
             RET=`virsh net-list --all --name`
-            if [ "${RET:?}" != "" ]; then
+            if [ "${RET}" != "" ]; then
             $__heat_wc_notify --data-binary '{"status": "FAILURE"}'
             exit 1
             fi
