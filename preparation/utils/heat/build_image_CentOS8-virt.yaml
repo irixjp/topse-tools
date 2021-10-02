@@ -10,7 +10,7 @@ resources:
     type: OS::Heat::WaitCondition
     properties:
       handle: { get_resource: wait_handle }
-      count: 1
+      count: 4
       timeout: 3600
 
   neutron-port:
@@ -33,13 +33,13 @@ resources:
       floatingip_id: { get_resource: floating_ip }
       port_id: { get_resource: neutron-port }
 
-  config_init_config:
+  config_kvm_config:
     type: OS::Heat::SoftwareConfig
     properties:
       config:
         str_replace:
           params:
-            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+            $__heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
             dnf install -y wget crudini vim bash-completion qemu-kvm libvirt virt-manager virt-install jq
@@ -47,29 +47,71 @@ resources:
             virsh net-destroy default
             virsh net-undefine default
             systemctl restart libvirtd
-            yum groupinstall -y "Workstation"
-            systemctl set-default graphical.target
-            systemctl start openvswitch
-            dnf clean all
+            RET=`virsh net-list --all --name`
+            if [ "${RET:?}" != "" ]; then
+            $__heat_wc_notify --data-binary '{"status": "FAILURE"}'
+            exit 1
+            fi
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
 
-  config_send_notify_after_settings:
+
+  config_desktop_config:
     type: OS::Heat::SoftwareConfig
     properties:
       config:
         str_replace:
           params:
-            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+            $__heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
           template: |
             #!/bin/bash -ex
-            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            dnf groupinstall -y "Workstation"
+            systemctl set-default graphical.target
+            RET=`systemctl get-default`
+            if [ "${RET:?}" != "graphical.target" ]; then
+            $__heat_wc_notify --data-binary '{"status": "FAILURE"}'
+            exit 1
+            fi
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_ovs_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $__heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            systemctl start openvswitch
+            ovs-vsctl show
+            RET=$?
+            if [ "${RET:?}" != "0" ]; then
+            $__heat_wc_notify --data-binary '{"status": "FAILURE"}'
+            exit 1
+            fi
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_send_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $__heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            dnf clean all
+            $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
             shutdown -h now
 
   server_init:
     type: OS::Heat::MultipartMime
     properties:
       parts:
-      - config: { get_resource: config_init_config }
-      - config: { get_resource: config_send_notify_after_settings }
+      - config: { get_resource: config_kvm_config }
+      - config: { get_resource: config_desktop_config }
+      - config: { get_resource: config_ovs_config }
+      - config: { get_resource: config_send_notify }
 
   instance1:
     type: OS::Nova::Server

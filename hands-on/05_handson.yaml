@@ -39,7 +39,7 @@ resources:
     type: OS::Heat::WaitCondition
     properties:
       handle: { get_resource: wait_handle }
-      count: 2
+      count: 1
       timeout: 1200
 
   key_pair:
@@ -96,7 +96,7 @@ resources:
     properties:
       name: handson5-virt
       image: CentOS8-virt
-      flavor: m1.large
+      flavor: m1.xlarge
       key_name: { get_resource: key_pair }
       networks:
         - port: { get_resource: neutron-port1 }
