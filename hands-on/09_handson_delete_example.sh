@@ -1,30 +1,55 @@
-function get_uuid () { cat - | grep " id " | awk '{print $4}'; }
-function grep_ip () { grep "[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+"; }
+#!/bin/bash -ex
 
-nova delete test-vm-1 test-vm-2 test-vm-3
+source keystonerc_admin
 
-FIPs=`neutron floatingip-list | grep_ip | awk '{print $2}'`
-for i in ${FIPs}
+openstack server delete test-vm-1 test-vm-2 test-vm-3
+sleep 3
+openstack port delete port77-11 port88-22 port99-22 port99-33
+sleep 3
+openstack volume delete clone-boot-vol
+sleep 3
+openstack volume snapshot delete boot-vol-snap
+sleep 3
+openstack volume delete boot-vol
+
+openstack keypair delete key-temp
+
+openstack router remove subnet Ext-Router 1st-subnet
+openstack router remove subnet Ext-Router 2nd-subnet
+openstack router remove subnet Closed-Router 3rd-subnet
+
+openstack router unset Ext-Router --external-gateway
+
+FIPs=`openstack floating ip list -f value -c ID`
+for FIP in ${FIPs:?}
 do
-    neutron floatingip-delete ${i}
+    openstack floating ip delete ${FIP:?}
 done
 
-neutron router-interface-delete Closed-Router 3rd-subnet
-neutron router-interface-delete Ext-Router 2nd-subnet
-neutron router-interface-delete Ext-Router work-subnet
-neutron router-gateway-clear Ext-Router public
-neutron router-delete Ext-Router
-neutron router-delete Closed-Router
-neutron net-delete 2nd-net
-neutron net-delete 3rd-net
-neutron net-delete work-net
-neutron net-delete public
-neutron security-group-delete open-all
+openstack network delete public
+openstack network delete 1st-net
+openstack network delete 2nd-net
+openstack network delete 3rd-net
 
-nova keypair-delete temp-key-1
-rm -f /root/temp-key-1.pem
+openstack router delete Ext-Router
+openstack router delete Closed-Router
 
-openstack image delete CentOS7
-rm -f /root/CentOS-7-x86_64-GenericCloud.qcow2
+openstack security group delete open-all
 
-openstack flavor delete 99
+openstack image delete cirros
+openstack flavor delete my.standard
+
+openstack server list
+openstack image list
+openstack flavor list
+openstack network list
+openstack subnet list
+openstack router list
+openstack security group list
+openstack security group rule list
+openstack volume list
+openstack volume snapshot list
+openstack port list
+
+echo "### done ###"
+

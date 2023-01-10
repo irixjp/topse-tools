@@ -1,32 +1,5 @@
 #!/bin/bash
 
-mkdir -p /root/temp
-
-echo "xxx.xxx.xxx.xxx reposerver" >> /etc/hosts
-
-rm -f /etc/yum.repos.d/*
-curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
-yum clean all
-yum repolist
-
-yum install -y wget crudini vim bash-completion lynx
-yum update -y
-
-rm -f /etc/yum.repos.d/CentOS*
-rm -f /etc/yum.repos.d/epel-*
-
-echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
-modprobe -r kvm_intel
-modprobe kvm_intel
-cat /sys/module/kvm_intel/parameters/nested
-
-cat << EOF > /usr/lib/sysctl.d/00-system.conf
-net.ipv4.ip_forward = 1
-net.ipv4.conf.default.rp_filter = 0
-net.ipv4.conf.all.rp_filter = 0
-net.ipv4.conf.all.forwarding = 1
-EOF
-
 echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
 sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
 mkdir -p /root/.ssh
@@ -34,8 +7,29 @@ chmod 700 /root/.ssh
 rm -f /root/.ssh/authorized_keys
 cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
+systemctl restart sshd
+
+cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
+DEVICE=eth0
+TYPE=Ethernet
+ONBOOT=yes
+BOOTPROTO=dhcp
+EOF
+
+cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth1
+DEVICE=eth1
+TYPE=Ethernet
+ONBOOT=yes
+BOOTPROTO=dhcp
+EOF
+
+cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth2
+DEVICE=eth2
+TYPE=Etherne
+ONBOOT=yes
+BOOTPROTO=none
+EOF
 
 echo "### finish!! ###"
 
 reboot
-

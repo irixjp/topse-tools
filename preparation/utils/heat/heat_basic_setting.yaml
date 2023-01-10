@@ -42,11 +42,13 @@ resources:
   role-teacher:
     type: OS::Keystone::Role
     properties:
+      domain: default
       name: teacher
 
   role-student:
     type: OS::Keystone::Role
     properties:
+      domain: default
       name: student
 
   user-teacher01:

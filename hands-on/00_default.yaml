@@ -127,18 +127,23 @@ resources:
               fi
               sleep 1
             done
+
             if [ "$REPO_CON" == "1" ]; then
               $__heat_wc_notify --data-binary '{"status": "FAILURE"}'
               exit 1
             fi
+
             dnf install -y \
             python3-openstackclient \
             python3-heatclient \
             jq wget vim crudini bash-completion git
+
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc
+
             wget reposerver/hands-on/support.sh -O /home/centos/support.sh
             chown centos:centos /home/centos/support.sh
+
             echo "$_private_key_" > /home/centos/.ssh/id_rsa
             echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
             chown centos:centos /home/centos/.ssh/id_rsa
@@ -147,6 +152,7 @@ resources:
             chmod 644 /home/centos/.ssh/id_rsa.pub
             echo "source ~/openrc" >> /home/centos/.bashrc
             echo "source ~/support.sh" >> /home/centos/.bashrc
+
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -157,6 +163,7 @@ resources:
           template: |
             #!/bin/bash -ex
             $__heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
   server_init:
     type: OS::Heat::MultipartMime
     properties:

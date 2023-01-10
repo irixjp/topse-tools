@@ -1,136 +1,184 @@
-function get_uuid () { cat - | grep " id " | awk '{print $4}'; }
+#!/bin/bash -ex
 
-function wait_instance () {
+# showing ovn state script
+curl -O reposerver/hands-on/ovn_get_state_cc.sh
+chmod +x ovn_get_state_cc.sh
+
+./ovn_get_state_cc.sh initial_state
+
+source keystonerc_admin
+
+# flavor
+openstack flavor create --public --id 99 --vcpus 1 --ram 1024 --disk 10 --ephemeral 0 --swap 0 my.standard
+
+# public network
+openstack network create public --external --provider-network-type flat --provider-physical-network extnet
+sleep 3 && ./ovn_get_state_cc.sh create_public_network
+
+# public subnet
+openstack subnet create public-subnet --network public --ip-version 4 --subnet-range 10.30.30.0/24 --gateway 10.30.30.254 --no-dhcp --allocation-pool start=10.30.30.160,end=10.30.30.180
+sleep 3 && ./ovn_get_state_cc.sh create_public_subnet
+
+# image
+curl -O http://reposerver/images/cirros-0.5.2-x86_64-disk.img
+openstack image create --container-format bare --disk-format qcow2 --min-disk 1 --min-ram 1024 --public --file cirros-0.5.2-x86_64-disk.img cirros
+
+# security group
+openstack security group create --description "allow all communications" open-all
+sleep 3 && ./ovn_get_state_cc.sh create_secgrp
+openstack security group rule create open-all --protocol tcp --dst-port 1:65535 --remote-ip 0.0.0.0/0
+sleep 3 && ./ovn_get_state_cc.sh add_tcp_rules
+openstack security group rule create open-all --protocol udp --dst-port 1:65535 --remote-ip 0.0.0.0/0
+sleep 3 && ./ovn_get_state_cc.sh add_udp_rules
+openstack security group rule create open-all --protocol icmp --remote-ip 0.0.0.0/0
+sleep 3 && ./ovn_get_state_cc.sh add_icmp_rule
+
+# Router
+openstack router create Ext-Router
+sleep 3 && ./ovn_get_state_cc.sh create_ext_router
+openstack router create Closed-Router
+sleep 3 && ./ovn_get_state_cc.sh create_closed_router
+
+PUB_SUBNET_ID=`openstack subnet list --name public-subnet -c ID -f value`
+openstack router set Ext-Router --external-gateway public --fixed-ip subnet=${PUB_SUBNET_ID:?},ip-address=10.30.30.160
+sleep 3 && ./ovn_get_state_cc.sh connect_ext_router_to_public
+
+# internal network
+openstack network create 1st-net
+sleep 3 && ./ovn_get_state_cc.sh create_1st_net
+openstack subnet create 1st-subnet --network 1st-net --ip-version 4 --subnet-range 10.77.77.0/24 --gateway 10.77.77.254 --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4
+sleep 3 && ./ovn_get_state_cc.sh create_1st_subnet
+
+openstack network create 2nd-net
+sleep 3 && ./ovn_get_state_cc.sh create_2nd_net
+openstack subnet create 2nd-subnet --network 2nd-net --ip-version 4 --subnet-range 10.88.88.0/24 --gateway 10.88.88.254 --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4
+sleep 3 && ./ovn_get_state_cc.sh create_2nd_subnet
+
+openstack network create 3rd-net
+sleep 3 && ./ovn_get_state_cc.sh create_3rd_net
+openstack subnet create 3rd-subnet --network 3rd-net --ip-version 4 --subnet-range 10.99.99.0/24 --gateway 10.99.99.254
+sleep 3 && ./ovn_get_state_cc.sh create_3rd_subnet
+
+openstack router add subnet Ext-Router 1st-subnet
+sleep 3 && ./ovn_get_state_cc.sh connect_ext_router_to_1st_net
+openstack router add subnet Ext-Router 2nd-subnet
+sleep 3 && ./ovn_get_state_cc.sh connect_ext_router_to_2nd_net
+openstack router add subnet Closed-Router 3rd-subnet
+sleep 3 && ./ovn_get_state_cc.sh connect_closed_router_to_3rd_net
+
+# port
+openstack port create port77-11 --network 1st-net --security-group open-all --fixed-ip subnet=1st-subnet,ip-address=10.77.77.11
+sleep 3 && ./ovn_get_state_cc.sh create_port77_11
+openstack port create port88-22 --network 2nd-net --security-group open-all --fixed-ip subnet=2nd-subnet,ip-address=10.88.88.22
+sleep 3 && ./ovn_get_state_cc.sh create_port88_22
+openstack port create port99-22 --network 3rd-net --security-group open-all --fixed-ip subnet=3rd-subnet,ip-address=10.99.99.22
+sleep 3 && ./ovn_get_state_cc.sh create_port99_22
+openstack port create port99-33 --network 3rd-net --security-group open-all --fixed-ip subnet=3rd-subnet,ip-address=10.99.99.33
+sleep 3 && ./ovn_get_state_cc.sh create_port99_33
+
+PORTID77_11=`openstack port list --fixed-ip ip-address=10.77.77.11 -c id -f value`
+PORTID88_22=`openstack port list --fixed-ip ip-address=10.88.88.22 -c id -f value`
+PORTID99_22=`openstack port list --fixed-ip ip-address=10.99.99.22 -c id -f value`
+PORTID99_33=`openstack port list --fixed-ip ip-address=10.99.99.33 -c id -f value`
+
+# volume
+openstack volume create --size 1 --image cirros boot-vol
+
+BOOT_VOL_STAT=`openstack volume show boot-vol -f json | jq -r .status`
 RETVAL=1
 while [ "$RETVAL" = 1 ]
 do
-    echo "#### waiting to boot instance ..."
-    sleep 5
-    nova show $1 | grep " status " | grep ACTIVE
-    RETVAL=$?
+    echo "#### waiting to create boot volume ..."
+    if [ ${BOOT_VOL_STAT:?} == "available" ]; then
+        RETVAL=0
+        echo done
+    else
+        sleep 5
+        BOOT_VOL_STAT=`openstack volume show boot-vol -f json | jq -r .status`
+    fi
 done
-}
 
-function wait_volume () {
+openstack volume snapshot create --volume boot-vol boot-vol-snap
+sleep 5
+openstack volume create --snapshot boot-vol-snap clone-boot-vol
+
+# keypair
+openstack keypair create key-temp | tee key-temp.pem
+chmod 600 key-temp.pem
+
+# instance
+openstack server create test-vm-1 --flavor my.standard --image "cirros" --key-name key-temp --nic port-id=${PORTID77_11}
+INSTANCE_STAT=`openstack server show test-vm-1 -f json | jq -r .status`
 RETVAL=1
 while [ "$RETVAL" = 1 ]
 do
-    echo "#### waiting to create bootable volume ..."
-    sleep 5
-    cinder show $1 | grep " status " | grep available
-    RETVAL=$?
+    echo "#### waiting to create instance ..."
+    if [ ${INSTANCE_STAT:?} == "ACTIVE" ]; then
+        RETVAL=0
+        echo done
+    else
+        sleep 5
+        INSTANCE_STAT=`openstack server show test-vm-1 -f json | jq -r .status`
+    fi
 done
-}
+sleep 3 && ./ovn_get_state_cc.sh create_test_vm_1
 
-echo "## creating image"
-wget http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2
- 
-openstack image create \
-          --container-format bare --disk-format qcow2 \
-          --min-disk 10 --min-ram 1024 --public \
-          --file CentOS-7-x86_64-GenericCloud.qcow2 \
-CentOS7
- 
-echo "## creating flavor"
-openstack flavor create --public --id 99 --vcpus 1 --ram 1024 \
-          --disk 10 --ephemeral 0 --swap 0 \
-          my.standard
- 
-echo "## creating public network"
-neutron net-create --router:external public
-neutron subnet-create --name public-subnet \
-        --allocation-pool start=172.16.100.101,end=172.16.100.104 \
-        --disable-dhcp \
-        --gateway 172.16.100.254 \
-        public 172.16.100.0/24
- 
-echo "## creating keypair"
-openstack keypair create temp-key-1 | tee /root/temp-key-1.pem
-chmod 600 /root/temp-key-1.pem
- 
-echo "## creating security group"
-neutron security-group-create open-all --description "allow all communications"
-neutron security-group-rule-create --direction ingress --ethertype IPv4 \
-        --protocol icmp \
-        --remote-ip-prefix 0.0.0.0/0 open-all
-neutron security-group-rule-create --direction ingress --ethertype IPv4 \
-        --protocol tcp --port-range-min 1 --port-range-max 65535 \
-        --remote-ip-prefix 0.0.0.0/0 open-all
-neutron security-group-rule-create --direction ingress --ethertype IPv4 \
-        --protocol udp --port-range-min 1 --port-range-max 65535 \
-        --remote-ip-prefix 0.0.0.0/0 open-all
+openstack server create test-vm-2 --flavor my.standard --image "cirros" --key-name key-temp --nic port-id=${PORTID88_22} --nic port-id=${PORTID99_22}
+INSTANCE_STAT=`openstack server show test-vm-2 -f json | jq -r .status`
+RETVAL=1
+while [ "$RETVAL" = 1 ]
+do
+    echo "#### waiting to create instance ..."
+    if [ ${INSTANCE_STAT:?} == "ACTIVE" ]; then
+        RETVAL=0
+        echo done
+    else
+        sleep 5
+        INSTANCE_STAT=`openstack server show test-vm-2 -f json | jq -r .status`
+    fi
+done
+sleep 3 && ./ovn_get_state_cc.sh create_test_vm_2
 
-echo "## creating routers"
-neutron router-create Ext-Router
-neutron router-create Closed-Router
-neutron router-gateway-set Ext-Router public
+openstack server create test-vm-3 --flavor my.standard --key-name key-temp --volume boot-vol --nic port-id=${PORTID99_33}
+INSTANCE_STAT=`openstack server show test-vm-3 -f json | jq -r .status`
+RETVAL=1
+while [ "$RETVAL" = 1 ]
+do
+    echo "#### waiting to create instance ..."
+    if [ ${INSTANCE_STAT:?} == "ACTIVE" ]; then
+        RETVAL=0
+        echo done
+    else
+        sleep 5
+        INSTANCE_STAT=`openstack server show test-vm-3 -f json | jq -r .status`
+    fi
+done
+sleep 3 && ./ovn_get_state_cc.sh create_test_vm_3
 
-echo "## creating 1st network"
-neutron net-create work-net
-neutron subnet-create --ip-version 4 --gateway 10.10.10.254 \
-        --name work-subnet --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4 \
-        work-net 10.10.10.0/24
-neutron router-interface-add Ext-Router work-subnet
+# floating ip
+FIP1=`openstack floating ip create public  --floating-ip-address 10.30.30.171 -f json | jq -r .floating_ip_address`
+sleep 3 && ./ovn_get_state_cc.sh create_fip_${FIP1:?}
+FIP2=`openstack floating ip create public  --floating-ip-address 10.30.30.172 -f json | jq -r .floating_ip_address`
+sleep 3 && ./ovn_get_state_cc.sh create_fip_${FIP2:?}
 
-echo "## creating 2nd network"
-neutron net-create 2nd-net
-neutron subnet-create --ip-version 4 --gateway 10.20.20.254 --name 2nd-subnet --dns-nameserver 8.8.8.8 --dns-nameserver 8.8.4.4 2nd-net 10.20.20.0/24
-neutron router-interface-add Ext-Router 2nd-subnet
-sleep 3
+openstack server add floating ip test-vm-1 ${FIP1:?}
+sleep 3 && ./ovn_get_state_cc.sh assoc_fip_${FIP1:?}
+openstack server add floating ip test-vm-2 ${FIP2:?}
+sleep 3 && ./ovn_get_state_cc.sh assoc_fip_${FIP2:?}
 
-echo "## creating 3rd network"
-neutron net-create 3rd-net
-neutron subnet-create --ip-version 4 --gateway 10.30.30.254 --name 3rd-subnet 3rd-net 10.30.30.0/24
-neutron router-interface-add Closed-Router 3rd-subnet
-sleep 3
+# output
+openstack server list
+openstack image list
+openstack flavor list
+openstack network list
+openstack subnet list
+openstack router list
+openstack security group list
+openstack security group rule list
+openstack volume list
+openstack volume snapshot list
+openstack port list
 
-export MY_WORK_NET=`neutron net-show work-net -c id | get_uuid`
-export MY_2ND_NET=`neutron net-show 2nd-net   -c id | get_uuid`
-export MY_3RD_NET=`neutron net-show 3rd-net   -c id | get_uuid`
-sleep 3
+echo "### done ###"
 
-echo "## creating boot volume"
-IMAGEID=`openstack image show "CentOS7" | get_uuid`
-cinder create --display-name boot-vol --image-id $IMAGEID 10
-
-wait_volume boot-vol
-
-VOLID=`cinder show boot-vol | grep " id " | get_uuid`
-
-echo "## creating snapshot & volume"
-cinder snapshot-create --display-name boot-vol-snap $VOLID
-SNAPID=`cinder snapshot-show boot-vol-snap | get_uuid`
-cinder create --snapshot-id $SNAPID --display-name copy-snap-vol 10
-
-
-echo "## booting instance"
-nova boot --flavor my.standard --image "CentOS7" \
---key-name temp-key-1 --security-groups open-all \
---nic net-id=${MY_WORK_NET} \
-test-vm-1
-wait_instance test-vm-1
-
-nova boot --flavor my.standard --image "CentOS7" \
---key-name temp-key-1 --security-groups open-all \
---nic net-id=${MY_2ND_NET} --nic net-id=${MY_3RD_NET} \
-test-vm-2
-wait_instance test-vm-2
-
-nova boot --flavor my.standard --boot-volume $VOLID \
---key-name temp-key-1 --security-groups open-all \
---nic net-id=${MY_3RD_NET} \
-test-vm-3
-wait_instance test-vm-3
-
-echo "## associating FIP"
-export FIP=`nova floating-ip-create public | grep public |grep "[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+" | awk -e '{print $4}'`
-nova floating-ip-associate test-vm-1 ${FIP}
-
-export FIP=`nova floating-ip-create public | grep public |grep "[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+" | awk -e '{print $4}'`
-nova floating-ip-associate test-vm-2 ${FIP}
-
-
-echo "#########"
-echo "## done !"
-echo "#########"
 

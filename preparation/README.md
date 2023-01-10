@@ -69,6 +69,13 @@ dnf install -y centos-release-ansible-29.noarch
 dnf install -y ansible
 ```
 
+repo サーバーのSELinuxを無効（コンテナからホストディレクトリにアクセスさせるため）
+
+``` bash
+sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+setenforce 0
+```
+
 ### hosts を更新
 
 例

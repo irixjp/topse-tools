@@ -1,0 +1,72 @@
+[baseos]
+name=CentOS Linux $releasever - BaseOS
+baseurl=http://reposerver/repos/baseos
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial
+
+[appstream]
+name=CentOS Linux $releasever - AppStream
+baseurl=http://reposerver/repos/appstream
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial
+
+[extras]
+name=CentOS Linux $releasever - Extras
+baseurl=http://reposerver/repos/extras
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial
+
+[powertools]
+name=CentOS Linux $releasever - PowerTools
+baseurl=http://reposerver/repos/powertools
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial
+
+[centos-rabbitmq-38]
+name=CentOS-8 - RabbitMQ 38
+baseurl=http://reposerver/repos/centos-rabbitmq-38
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Messaging
+
+[centos-openstack-train]
+name=CentOS- $releasever - OpenStack train
+baseurl=http://reposerver/repos/centos-openstack-train
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Cloud
+exclude=sip,PyQt4
+
+[advanced-virtualization]
+name=CentOS-8 - Advanced Virtualization
+baseurl=http://reposerver/repos/advanced-virtualization
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Virtualization-RDO
+module_hotfixes=1
+
+[ceph-nautilus]
+name=CentOS-8 - Ceph Nautilus
+baseurl=http://reposerver/repos/ceph-nautilus
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Storage
+module_hotfixes=1
+
+[epel]
+name=Extra Packages for Enterprise Linux $releasever - $basearch
+baseurl=http://reposerver/repos/epel
+enabled=0
+gpgcheck=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8
+
+[epel-modular]
+name=Extra Packages for Enterprise Linux Modular $releasever - $basearch
+baseurl=http://reposerver/repos/epel-modular
+enabled=0
+gpgcheck=0
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8

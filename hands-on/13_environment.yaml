@@ -1,3 +1,0 @@
-resource_registry:
-  My::SimpleServer::file: 13_02_simple_server.yaml
-#  My::SimpleServer::github: https://raw.githubusercontent.com/irixjp/topse-tools/master/hands-on/13_02_simple_server.yaml
