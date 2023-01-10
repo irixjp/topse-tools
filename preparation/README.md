@@ -83,14 +83,15 @@ xxx.x.xxx.xx com3
 ### root@repo -> centos@cc/com へのSSH認証を設定する
 
 ``` bash
+cd ~/
 ssh-keygen -P '' -f ~/.ssh/id_rsa
 cat ~/.ssh/id_rsa.pub
 
-ansible all -i cc,com1,com2, -u centos -m ping
+ansible all -i cc,com1,com2, -b -u centos -m ping -o
 ```
 
 
-### kipmi が CPU100%になる場合のワークアラウンド
+### kipmi が CPU100%になる場合のワークアラウンド(多分不要)
 
 ```
 # プロセス/CPUの確認
@@ -109,6 +110,7 @@ OpenStackのデプロイ
 ### 事前の確認
 
 - nii_hosts を編集してホストを列挙する
+- `reposerver_ip` と `openstack_password` を設定する
 
 ``` bash
 cd /mnt/topse-tools/preparation/
