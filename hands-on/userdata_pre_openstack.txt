@@ -9,6 +9,10 @@ cp /home/centos/.ssh/authorized_keys /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 systemctl restart sshd
 
+ifdown eth0
+ifdown eth1
+ifdown eth2
+
 cat << EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
 DEVICE=eth0
 TYPE=Ethernet
@@ -29,6 +33,11 @@ TYPE=Etherne
 ONBOOT=yes
 BOOTPROTO=none
 EOF
+
+ifup eth0
+ifup eth1
+ifup eth2
+sleep 10
 
 echo "### finish!! ###"
 

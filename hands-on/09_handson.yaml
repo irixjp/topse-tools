@@ -98,7 +98,7 @@ resources:
     properties:
       network: { get_resource: management_network }
       fixed_ips:
-        - ip_address: 10.10.10.150
+        - ip_address: 10.10.10.100
       security_groups:
         - open-all
 
@@ -107,7 +107,7 @@ resources:
     properties:
       network: { get_resource: internal_network }
       fixed_ips:
-        - ip_address: 10.20.20.150
+        - ip_address: 10.20.20.100
       security_groups:
         - open-all
 
@@ -116,7 +116,7 @@ resources:
     properties:
       network: { get_resource: external_network }
       fixed_ips:
-        - ip_address: 10.30.30.150
+        - ip_address: 10.30.30.100
       security_groups:
         - open-all
 
@@ -203,7 +203,7 @@ resources:
         ifup eth0
         ifup eth1
         ifup eth2
-        sleep 5
+        sleep 10
 
 
   config_packstack:
@@ -261,14 +261,14 @@ resources:
         crudini --set /etc/nova/nova.conf libvirt virt_type kvm
         crudini --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
         crudini --set /etc/nova/nova.conf vnc enabled true
-        crudini --set /etc/nova/nova.conf vnc novncproxy_base_url http://10.10.10.150:6080/vnc_auto.html
+        crudini --set /etc/nova/nova.conf vnc novncproxy_base_url http://10.10.10.100:6080/vnc_auto.html
         crudini --set /etc/nova/nova.conf vnc server_listen 0.0.0.0
         crudini --set /etc/nova/nova.conf vnc keymap ja
         crudini --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32
         crudini --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 16
         crudini --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 12
         crudini --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
-        crudini --set /etc/nova/nova.conf vnc server_proxyclient_address 10.10.10.150
+        crudini --set /etc/nova/nova.conf vnc server_proxyclient_address 10.10.10.100
         echo "" >> /etc/nova/migration/identity
 
 
