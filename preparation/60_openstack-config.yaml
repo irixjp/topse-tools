@@ -1,0 +1,82 @@
+- name: Controller node configration
+  hosts: controller
+  become: true
+  tasks:
+
+  - set_fact:
+      cc_host: "{{ hostvars[inventory_hostname]['groups']['controller'] | join(',') }}"
+      nw_host: "{{ hostvars[inventory_hostname]['groups']['controller'] | join(',') }}"
+      com_hosts: "{{ hostvars[inventory_hostname]['groups']['compute'] | join(',') }}"
+
+  - name: openstack config after packstack
+    ini_file:
+      path: "{{ item[0] }}"
+      section: "{{ item[1] }}"
+      option: "{{ item[2] }}"
+      value: "{{ item[3] }}"
+      state: present
+    loop:
+      - ["/etc/neutron/plugins/ml2/ml2_conf.ini", "ml2", "path_mtu", "1500"]
+      - ["/etc/neutron/plugins/ml2/ml2_conf.ini", "ml2_type_geneve", "vni_ranges", "10:2000"]
+      - ["/etc/cinder/cinder.conf", "lvm", "volume_clear", "none"]
+
+  - name: limits setting
+    blockinfile:
+      path: /etc/security/limits.conf
+      block: |
+        *         hard    nofile      600000
+        *         soft    nofile      600000
+        root      hard    nofile      600000
+        root      soft    nofile      600000
+
+  - name: create mariadb config dir
+    file:
+      path: /etc/systemd/system/mariadb.service.d/
+      state: directory
+
+  - name: put mariadb config
+    copy:
+      dest: /etc/systemd/system/mariadb.service.d/limits.conf
+      content: |
+        [Service]
+        LimitNOFILE = 600000
+
+  - name: reload daemon
+    systemd:
+      daemon_reload: yes
+
+- name: Compute node configration
+  hosts: all
+  become: true
+  tasks:
+
+  - set_fact:
+      cc_host: "{{ hostvars[inventory_hostname]['groups']['controller'] | join(',') }}"
+      nw_host: "{{ hostvars[inventory_hostname]['groups']['controller'] | join(',') }}"
+      com_hosts: "{{ hostvars[inventory_hostname]['groups']['compute'] | join(',') }}"
+
+  - name: openstack config after packstack
+    ini_file:
+      path: "{{ item[0] }}"
+      section: "{{ item[1] }}"
+      option: "{{ item[2] }}"
+      value: "{{ item[3] }}"
+      state: present
+    loop:
+      - ["/etc/nova/nova.conf", "libvirt", "virt_type", "kvm"]
+      - ["/etc/nova/nova.conf", "libvirt", "cpu_mode", "host-passthrough"]
+      - ["/etc/nova/nova.conf", "vnc", "enabled", "true"]
+      - ["/etc/nova/nova.conf", "vnc", "novncproxy_base_url", "http://{{ cc_host }}:6080/vnc_auto.html"]
+      - ["/etc/nova/nova.conf", "vnc", "server_listen", "0.0.0.0"]
+      - ["/etc/nova/nova.conf", "vnc", "keymap", "ja"]
+      - ["/etc/nova/nova.conf", "vnc", "server_proxyclient_address", "{{ inventory_hostname }}"]
+      - ["/etc/nova/nova.conf", "DEFAULT", "cpu_allocation_ratio", "32"]
+      - ["/etc/nova/nova.conf", "DEFAULT", "ram_allocation_ratio", "16"]
+      - ["/etc/nova/nova.conf", "DEFAULT", "disk_allocation_ratio", "12"]
+      - ["/etc/nova/nova.conf", "DEFAULT", "allow_resize_to_same_host", "true"]
+
+- name: workaround for resize failure
+  hosts: compute
+  become: true
+  tasks:
+    - shell: echo "" >> /etc/nova/migration/identity

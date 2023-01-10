@@ -1,0 +1,16 @@
+[controller]
+157.1.141.12
+
+[compute]
+157.1.141.11
+157.1.141.15
+
+[all:vars]
+ansible_user=centos
+reposerver_ip=157.1.141.19
+gateway_ip=157.1.140.1
+dns_ip1=157.1.24.201
+dns_ip2=136.187.17.3
+openstack_password=topse2023
+bridge_interface=eno2
+tunnel_interface=eno2
