@@ -6,6 +6,8 @@ source ~/keystonerc_admin
 USERLIST='0000
 9999'
 
+openstack role create student
+
 for i in $USERLIST
 do
   openstack project create tenant-${i}
