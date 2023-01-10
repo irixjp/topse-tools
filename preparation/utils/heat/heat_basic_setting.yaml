@@ -1,11 +1,11 @@
-heat_template_version: 2016-04-08
+heat_template_version: 2018-08-31
 
 description: Setup default environment.
 
 parameters:
   passwd:
     type: string
-    default: ^topse2017$
+    default: topse2023
 
 resources:
   public:
@@ -13,7 +13,7 @@ resources:
     properties:
       name: public
       network_type: flat
-      physical_network: physnet1
+      physical_network: extnet
       router_external: True
 
   public-subnet:
@@ -21,8 +21,8 @@ resources:
     properties:
       name: public-subnet
       allocation_pools:
-        - start: 157.1.141.20
-          end: 157.1.141.30
+        - start: 157.1.141.101
+          end: 157.1.141.200
       cidr: 157.1.140.0/23
       enable_dhcp: False
       gateway_ip: 157.1.140.1

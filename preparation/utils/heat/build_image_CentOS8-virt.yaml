@@ -74,7 +74,7 @@ resources:
     properties:
       name: handson-image-CentOS8-virt
       image: CentOS8
-      flavor: m1.tiny
+      flavor: m1.small
       key_name: key-for-build
       networks:
         - port: { get_resource: neutron-port }
