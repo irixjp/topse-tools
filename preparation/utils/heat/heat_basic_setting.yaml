@@ -78,3 +78,47 @@ resources:
           project: { get_resource: pj-topse02 }
         - role: heat_stack_owner
           project: { get_resource: pj-topse02 }
+
+  quota-nova-topse01:
+    type: OS::Nova::Quota
+    properties:
+      project: {get_resource: pj-topse01}
+      cores: 1000
+      instances: 1000
+      ram: 8192000
+
+  quota-cinder-topse01:
+    type: OS::Cinder::Quota
+    properties:
+      project: {get_resource: pj-topse01}
+      volumes: 100
+      gigabytes: 1000
+
+  quota-neutron-topse01:
+    type: OS::Neutron::Quota
+    properties:
+      project: {get_resource: pj-topse01}
+      floatingip: 100
+      port: 1000
+
+  quota-nova-topse02:
+    type: OS::Nova::Quota
+    properties:
+      project: {get_resource: pj-topse02}
+      cores: 20
+      instances: 5
+      ram: 40960
+
+  quota-cinder-topse02:
+    type: OS::Cinder::Quota
+    properties:
+      project: {get_resource: pj-topse02}
+      volumes: 10
+      gigabytes: 10
+
+  quota-neutron-topse02:
+    type: OS::Neutron::Quota
+    properties:
+      project: {get_resource: pj-topse02}
+      floatingip: 2
+      router: 1

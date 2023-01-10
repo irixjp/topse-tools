@@ -69,6 +69,7 @@ resources:
               exit 1
             fi
             dnf repolist
+
   config_init_config:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -92,6 +93,7 @@ resources:
             modprobe kvm_intel
             rm -rf /etc/sysconfig/network-scripts/ifcfg-ens*
             dnf clean all
+
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
     properties:

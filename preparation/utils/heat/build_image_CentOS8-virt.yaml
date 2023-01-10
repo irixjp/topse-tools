@@ -51,6 +51,7 @@ resources:
             systemctl set-default graphical.target
             systemctl start openvswitch
             dnf clean all
+
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -62,6 +63,7 @@ resources:
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
             shutdown -h now
+
   server_init:
     type: OS::Heat::MultipartMime
     properties:
