@@ -1,9 +1,0 @@
-clouds:
-  topse01:
-    auth:
-      auth_url: http://xx.xx.xx.xx:5000
-      project_name: tenant-xx
-      username: student-xx
-      password: xx
-    identity_api_version: '2'
-    region_name: RegionOne
