@@ -203,12 +203,7 @@ resources:
         ifup eth0
         ifup eth1
         ifup eth2
-<<<<<<< HEAD
-        sleep 5
-=======
         sleep 10
->>>>>>> 2022-01
-
 
   config_packstack:
     type: OS::Heat::SoftwareConfig
@@ -265,22 +260,14 @@ resources:
         crudini --set /etc/nova/nova.conf libvirt virt_type kvm
         crudini --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
         crudini --set /etc/nova/nova.conf vnc enabled true
-<<<<<<< HEAD
-        crudini --set /etc/nova/nova.conf vnc novncproxy_base_url http://10.10.10.150:6080/vnc_auto.html
-=======
         crudini --set /etc/nova/nova.conf vnc novncproxy_base_url http://10.10.10.100:6080/vnc_auto.html
->>>>>>> 2022-01
         crudini --set /etc/nova/nova.conf vnc server_listen 0.0.0.0
         crudini --set /etc/nova/nova.conf vnc keymap ja
         crudini --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32
         crudini --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 16
         crudini --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 12
         crudini --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
-<<<<<<< HEAD
-        crudini --set /etc/nova/nova.conf vnc server_proxyclient_address 10.10.10.150
-=======
         crudini --set /etc/nova/nova.conf vnc server_proxyclient_address 10.10.10.100
->>>>>>> 2022-01
         echo "" >> /etc/nova/migration/identity
 
 
