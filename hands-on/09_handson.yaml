@@ -236,7 +236,6 @@ resources:
 
         time packstack --answer-file /root/openstack-answer.txt
 
-
   config_after_openstack:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -269,7 +268,6 @@ resources:
         crudini --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
         crudini --set /etc/nova/nova.conf vnc server_proxyclient_address 10.10.10.100
         echo "" >> /etc/nova/migration/identity
-
 
   server_init_openstack:
     type: OS::Heat::MultipartMime
