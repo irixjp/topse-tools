@@ -1,7 +1,0 @@
----
-- shell: getenforce
-  register: ret
-
-- assert:
-    that:
-      - ret.stdout is match("Disabled")

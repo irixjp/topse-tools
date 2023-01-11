@@ -98,11 +98,7 @@ resources:
     properties:
       network: { get_resource: management_network }
       fixed_ips:
-<<<<<<< HEAD
-        - ip_address: 10.10.10.150
-=======
         - ip_address: 10.10.10.100
->>>>>>> 2022-01
       security_groups:
         - open-all
 
@@ -111,11 +107,7 @@ resources:
     properties:
       network: { get_resource: internal_network }
       fixed_ips:
-<<<<<<< HEAD
-        - ip_address: 10.20.20.150
-=======
         - ip_address: 10.20.20.100
->>>>>>> 2022-01
       security_groups:
         - open-all
 
@@ -124,11 +116,7 @@ resources:
     properties:
       network: { get_resource: external_network }
       fixed_ips:
-<<<<<<< HEAD
-        - ip_address: 10.30.30.150
-=======
         - ip_address: 10.30.30.100
->>>>>>> 2022-01
       security_groups:
         - open-all
 

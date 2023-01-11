@@ -94,10 +94,6 @@ resources:
             rm -rf /etc/sysconfig/network-scripts/ifcfg-ens*
             dnf clean all
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 2022-01
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -109,10 +105,7 @@ resources:
             #!/bin/bash -ex
             __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
             shutdown -h now
-<<<<<<< HEAD
 
-=======
->>>>>>> 2022-01
   server_init:
     type: OS::Heat::MultipartMime
     properties:
@@ -127,11 +120,7 @@ resources:
     properties:
       name: handson-image-CentOS8
       image: CentOS8-orig
-<<<<<<< HEAD
-      flavor: m1.tiny
-=======
       flavor: m1.small
->>>>>>> 2022-01
       key_name: key-for-build
       networks:
         - port: { get_resource: neutron-port }

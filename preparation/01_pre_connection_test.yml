@@ -1,6 +1,0 @@
----
-- name: connection test to all nodes
-  hosts: all
-  gather_facts: no
-  roles:
-    - check_install_requirements

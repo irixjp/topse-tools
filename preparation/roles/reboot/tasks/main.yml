@@ -1,8 +1,0 @@
----
-- ping:
-
-- name: Reboot machines
-  reboot:
-    reboot_timeout: 900
-
-- ping:
