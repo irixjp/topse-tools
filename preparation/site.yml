@@ -1,7 +1,8 @@
 ---
-- import_playbook: 01_pre_connection_test.yml
-- import_playbook: 02_requirements_setup.yml
-- import_playbook: 03_reboot.yml
-- import_playbook: 04_test_requiremetns.yml
-- import_playbook: 05_packstack.yml
-- import_playbook: 06_reboot.yml
+- import_playbook: 10_test_connection.yaml
+- import_playbook: 20_requirements.yaml
+- import_playbook: reboot.yaml
+- import_playbook: 40_test_requiremetns.yaml
+- import_playbook: 50_packstack.yaml
+- import_playbook: 60_openstack-config.yaml
+- import_playbook: reboot.yaml

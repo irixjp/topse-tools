@@ -5,7 +5,11 @@ description: Setup default environment.
 parameters:
   passwd:
     type: string
+<<<<<<< HEAD
     default: password
+=======
+    default: topse2023
+>>>>>>> 2022-01
 
 resources:
   public-net:
@@ -21,11 +25,17 @@ resources:
     properties:
       name: public-subnet
       allocation_pools:
+<<<<<<< HEAD
         - start: 192.168.122.160
           end: 192.168.122.169
         - start: 192.168.122.180
           end: 192.168.122.189
       cidr: 192.168.122.0/24
+=======
+        - start: 157.1.141.101
+          end: 157.1.141.200
+      cidr: 157.1.140.0/23
+>>>>>>> 2022-01
       enable_dhcp: False
       gateway_ip: 192.168.122.1
       ip_version: 4
@@ -47,6 +57,15 @@ resources:
       domain: default
       name: teacher
 
+<<<<<<< HEAD
+=======
+  role-student:
+    type: OS::Keystone::Role
+    properties:
+      domain: default
+      name: student
+
+>>>>>>> 2022-01
   user-teacher01:
     type: OS::Keystone::User
     properties:
@@ -118,4 +137,7 @@ resources:
       project: {get_resource: pj-topse02}
       floatingip: 2
       router: 1
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2022-01

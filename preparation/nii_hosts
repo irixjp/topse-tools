@@ -1,0 +1,11 @@
+[controller]
+157.1.141.12
+
+[compute]
+157.1.141.11
+157.1.141.15
+
+[all:vars]
+ansible_user=centos
+reposerver_ip=157.1.141.19
+openstack_password=topse2023

@@ -4,9 +4,9 @@ TOPSE「クラウド基盤構築演習」環境構築方法
 研究クラウド側のイメージ
 ------------
 
-`centos7-image_20170519` を使用してベアメタルインスタンス `compute.a` を起動する。
+`(deprecated) centos8.2-image_20201022` を使用してベアメタルインスタンス `compute.a` を起動する。接続するネットワークは `TOPSE` を選択。
 
-利用するサーバーの種類
+利用するサーバーの種類と台数
 
 - リポジトリ・演習素材配布サーバー 1台（作業の前半はここで実施）
 - コントローラー 1台（作業の後半はここから実施）
@@ -24,137 +24,81 @@ tmpfs            63G     0   63G   0% /sys/fs/cgroup
 tmpfs            13G     0   13G   0% /run/user/1000
 ```
 
+NICの関係
+
+```
+eno1 使わない
+eno2 使う。すべてのトラフィックが流れる
+eno3 使わない
+その他は使わない
+```
+
 
 準備 - テスト環境の構築(リポジトリサーバーで実施する)
 ------------
 
 全て `root` で実施
 
-### 最新化・必要パッケージのインストール
+### 最新化・必要パッケージのインストール、リポジトリのURLが変更されているので調整する
 
 ```
-yum install -y tmux
-yum update -y
-yum install -y epel-release
-yum install -y qemu-kvm libvirt virt-manager virt-install \
-               libguestfs libguestfs-tools \
-               yum-utils device-mapper-persistent-data lvm2 \
-               jq ansible git vim
-yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-yum install -y docker-ce
-```
+sudo -i
 
-### Nested KVMの有効化
+sed -i -e 's/^mirrorlist/#mirrorlist/' -e 's/#baseurl/baseurl/' -e 's/mirror.centos.org/vault.centos.org/' /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-AppStream.repo
 
-```
-echo "options kvm_intel nested=1" > /etc/modprobe.d/kvm-nested.conf
-modprobe -r kvm_intel
-modprobe kvm_intel
-```
+dnf clean all
+dnf repolist
+dnf install -y tmux
+dnf install -y podman git
+podman pull irixjp/topse-cloud-repo:train-v1.4
 
-### サービスの設定と再起動
-
-```
-systemctl stop firewalld
-systemctl disable firewalld
-systemctl enable docker
-systemctl start  docker
-
-reboot
-```
-
-### マテリアルの取得
-
-```
 cd /mnt
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2020-01
+BRANCH_NAME=2022-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+git branch
 
-mkdir -p /mnt/dvd
+podman run -d -p 80:80 --name train-repo \
+         -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
+         -v /mnt/topse-tools/preparation:/var/www/html/preparation \
+           irixjp/topse-cloud-repo:train-v1.4
+
+dnf install -y centos-release-ansible-29.noarch
+dnf install -y ansible
 ```
 
-### 認証キーの作成
+repo サーバーのSELinuxを無効（コンテナからホストディレクトリにアクセスさせるため）
 
-```
-cd preparation/utils
-rm -f ansible*
-ssh-keygen -f ansible_key -P '' -t rsa
-```
-
-### リポジトリコンテナの起動
-
-```
-IMAGE_VERSION=newton-v2.0
-docker run -d -p 80:80 \
-       --name repo \
-       -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
-       -v /mnt/topse-tools/preparation:/var/www/html/preparation \
-       -v /mnt/dvd:/var/www/html/dvd \
-       irixjp/topse-cloud-repo:${IMAGE_VERSION}
-
-cd /mnt
-curl -O localhost/images/Cent7-Mini.iso
-mount -o loop /mnt/Cent7-Mini.iso /mnt/dvd/
-
-docker stop repo; docker start repo
+``` bash
+sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+setenforce 0
 ```
 
-### 各ノードのSSHD設定
+### hosts を更新
 
-リポジトリサーバから各 OpenStack ホストに ssh できるようにする。
-
+例
 ```
-ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
+157.1.141.19 reposerver
+157.1.141.22 cc
+157.1.141.13 com1
+157.1.141.20 com2
+xxx.x.xxx.xx com3
+```
+
+### root@repo -> centos@cc/com へのSSH認証を設定する
+
+``` bash
+cd ~/
+ssh-keygen -P '' -f ~/.ssh/id_rsa
 cat ~/.ssh/id_rsa.pub
-```
 
-上記の公開鍵を全OpenStackノードのログインユーザーの`~/.ssh/authorized_keys`に追記する。
-
-以下はユーザー `centos` の例（一般ユーザーは何でも良い）
-
-* 2018.6.20 追記
-演習サーバーの設定が変わったようで、初回のログイン時にパスワードの変更を要求される（空にできない）。同じ状況の場合は、 ansible コマンドに -K をつけて、sudo 時のパスワードを入力する。
-
-```
-# インベントリにホストを設定
-cd /mnt/topse-tools/preparation/
-vim production
-
-# 接続確認
-ansible openstack-all --private-key ~/.ssh/id_rsa -f 10 -u centos -b -m ping -o
-
-# root の authorized_key にコピー
-ansible openstack-all -u centos -b -m shell -a 'cat /home/centos/.ssh/authorized_keys > /root/.ssh/authorized_keys' -o
-
-# root ログインを有効化
-ansible openstack-all -u centos -b -m shell -a "sed -i -e 's/^PermitRootLogin no$/PermitRootLogin yes/g' /etc/ssh/sshd_config; systemctl restart sshd" -o
-
-# root での接続テスト
-ansible openstack-all -f 10 -u root -m ping -o
+ansible all -i cc,com1,com2, -b -u centos -m ping -o
 ```
 
 
-### Gen3でのネットワーク対応
-
-cloud-init が起動のたびにNIC設定を初期化するので無効化しておく。
-
-```
-ansible openstack-all -u root -m shell -a 'ls -l /var/lib/cloud/scripts/per-boot/set_network.sh' -o
-ansible openstack-all -u root -m shell -a 'rm -Rf /var/lib/cloud/scripts/per-boot/set_network.sh' -o
-```
-
-### DNSが eno3 の DHCP に上書きされるので、無効にしておく（eno2 のDNSを使う）
-
-```
-ansible openstack-all -u root -m shell -a 'echo PEERDNS=no >> /etc/sysconfig/network-scripts/ifcfg-eno3' -o
-ansible openstack-all -u root -m shell -a 'cat /etc/sysconfig/network-scripts/ifcfg-eno3' -o
-```
-
-
-### kipmi が CPU100%になる場合のワークアラウンド
+### kipmi が CPU100%になる場合のワークアラウンド(多分不要)
 
 ```
 # プロセス/CPUの確認
@@ -172,13 +116,13 @@ OpenStackのデプロイ
 
 ### 事前の確認
 
-- リポジトリサーバーのIPアドレスを記入 → `group_vars/all`
-- OpenStack に設定する admin パスワードを記入 → `group_vars/all`
-- OpenStackノードのIPアドレスの記入 → `production`
-- NIC の名前を記入 → `group_vars/production`
-  - 157.x.x.x のIPが設定されたNICを指定（通常は eno2）
-- コントローラーのIPアドレスを記入 → `utils/ifcfg-br-ex-eno2.cfg.j2`
+- nii_hosts を編集してホストを列挙する
+- `reposerver_ip` と `openstack_password` を設定する
 
+``` bash
+cd /mnt/topse-tools/preparation/
+vi nii_hosts
+```
 
 ### 構築の実行
 
@@ -192,90 +136,8 @@ cd /mnt/topse-tools/preparation/
 ansible-playbook -f ${FORK:?} site.yml
 ```
 
-もし個別のステップを実行する場合には以下のようにする(手間がかかるがこっちがおすすめ
-```
-FORK=20
 
-cd /mnt/topse-tools/preparation/
-ansible-playbook -f ${FORK:?} 01_pre_connection_test.yml
-ansible-playbook -f ${FORK:?} 02_requirements_setup.yml
-ansible-playbook -f ${FORK:?} 03_reboot.yml
-
-# ここで少しCPUとI/Oの様子を見る
-ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
-
-ansible-playbook -f ${FORK:?} 04_test_requiremetns.yml
-ansible-playbook -f ${FORK:?} 05_packstack.yml
-
-# 後述するMariaDBの対策を実施する
-
-ansible-playbook -f ${FORK:?} 06_reboot.yml
-
-# 後述するSELinuxの無効化を行う
-
-#ここで少しCPUとI/Oの様子を見る
-ansible openstack-all -f ${FORK:?} -u root -m shell -a 'vmstat 1 10'
-```
-
-* yum update 後にリブートすると、起動後に5分程度重い処理が走っているので注意。
-
-
-### MariaDB がエラーになる問題の対処
-
-コントローラーノードで実行
-
-参考: https://www.tuxfixer.com/mariadb-high-cpu-usage-in-openstack-pike/#more-3897
-```
-# CPU が 100% で張り付く
-   PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
-  2431 mysql     20   0 20.783g 388552  12680 R 100.0  0.3  16:08.93 mysqld
-
-# エラーログが出る
-cat /var/log/mariadb/mariadb.log | grep Error
-2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
-2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
-2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
-2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
-2018-07-03  0:30:43 139644361763008 [ERROR] Error in accept: Bad file descriptor
-```
-
-```
-# ulimit の増加
-vim /etc/security/limits.conf
----
-*         hard    nofile      600000
-*         soft    nofile      600000
-root      hard    nofile      600000
-root      soft    nofile      600000
----
-
-# mariadb Limits の増加
-mkdir /etc/systemd/system/mariadb.service.d/
-vim /etc/systemd/system/mariadb.service.d/limits.conf
----
-[Service]
-LimitNOFILE=600000
----
-
-systemctl daemon-reload
-systemctl restart mariadb
-
-mysql -u root
-show variables like 'open_files_limit';
-
-ansible-playbook -f ${FORK:?} 06_reboot.yml
-```
-
-
-### SELinux が有効だと、Resize/Migration が失敗する。
-
-ワークアラウンド、リブートすると無効になる。
-
-```bash
-ansible openstack-all -u root -m shell -a 'setenforce 0' -o
-```
-
-
+以下、編集中 2023-01-10
 
 構築したOpenStack環境の基礎設定
 ------------
@@ -290,8 +152,9 @@ cd ~/
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2020-01
+BRANCH_NAME=2022-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+git branch
 
 cd ~/
 source keystonerc_admin
@@ -361,7 +224,7 @@ nova list
 
 # 環境に合わせて変更
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.19
+HEAT_REPOIP=157.1.141.13
 
 heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
 ```
@@ -376,8 +239,9 @@ ssh centos@${CONSOLE}
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2020-01
+BRANCH_NAME=2022-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
+git branch
 ```
 
 `openrc_teacher01` のエンドポイントとパスワードを設定しておく。
@@ -530,7 +394,7 @@ openstack image delete Docker
 
 ```
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.13
 
 cd ~/topse-tools/preparation/utils/heat
 heat stack-create --poll -f build_docker_image.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" docker-image-build
@@ -549,10 +413,11 @@ ssh centos@${CONSOLE}
 sudo -i
 docker ps -a
 
-docker pull jenkins
+docker pull jenkins/jenkins
 docker pull redmine
 docker pull centos:6
 docker pull centos:7
+docker pull centos:8
 docker pull enakai00/eplite:ver1.0
 docker pull enakai00/epmysql:ver1.0
 docker pull minio/minio
@@ -591,7 +456,7 @@ nova list
 
 heat stack-create --poll -f setup_tools_env.yaml tools-env
 
-HEAT_REPOIP=157.1.141.19
+HEAT_REPOIP=157.1.141.13
 heat stack-create --poll -f etherpad.yaml -P "reposerver=${HEAT_REPOIP:?}" etherpad
 
 nova console-log --length 100 etherpad

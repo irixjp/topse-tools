@@ -1,0 +1,77 @@
+- name: OpenStack Installation
+  hosts: controller
+  become: true
+  tasks:
+
+  - set_fact:
+      cc_host: "{{ hostvars[inventory_hostname]['groups']['controller'] | join(',') }}"
+      nw_host: "{{ hostvars[inventory_hostname]['groups']['controller'] | join(',') }}"
+      com_hosts: "{{ hostvars[inventory_hostname]['groups']['compute'] | join(',') }}"
+
+  - name: install openstack-packstack
+    dnf:
+      name: openstack-packstack
+      state: latest
+
+  - name: create answer file for controller
+    shell:
+      cmd: |
+        packstack --dry-run --allinone \
+        --default-password='{{ openstack_password }}' \
+        --provision-demo=n --gen-answer-file=/root/openstack-answer-controller.txt
+      creates: /root/openstack-answer-controller.txt
+
+  - name: controller node config
+    ini_file:
+      path: /root/openstack-answer-controller.txt
+      section: general
+      option: "{{ item[0] }}"
+      value: "{{ item[1] }}"
+      state: present
+    loop:
+      - ["CONFIG_NOVA_INSTALL", "y"]
+      - ["CONFIG_GLANCE_INSTALL", "y"]
+      - ["CONFIG_CINDER_INSTALL", "y"]
+      - ["CONFIG_NEUTRON_INSTALL", "y"]
+      - ["CONFIG_HORIZON_INSTALL", "y"]
+      - ["CONFIG_SWIFT_INSTALL", "y"]
+      - ["CONFIG_HEAT_INSTALL", "y"]
+      - ["CONFIG_HEAT_CFN_INSTALL", "n"]
+      - ["CONFIG_AODH_INSTALL", "n"]
+      - ["CONFIG_CEILOMETER_INSTALL", "n"]
+      - ["CONFIG_PROVISION_DEMO", "n"]
+      - ["CONFIG_NEUTRON_METERING_AGENT_INSTALL", "n"]
+      - ["CONFIG_COMPUTE_HOSTS", ""]
+      - ["CONFIG_NEUTRON_OVN_BRIDGE_MAPPINGS", "extnet:br-ex"]
+      - ["CONFIG_NEUTRON_OVN_EXTERNAL_PHYSNET", "extnet"]
+      - ["CONFIG_NEUTRON_OVN_BRIDGE_IFACES", "br-ex:eno2"]
+      - ["CONFIG_NEUTRON_OVN_BRIDGES_COMPUTE", "br-ex"]
+      - ["CONFIG_CINDER_VOLUMES_SIZE", "300G"]
+      - ["CONFIG_SWIFT_STORAGE_SIZE", "100G"]
+
+  - name: exec packstack for controller
+    shell:
+      cmd: |
+        packstack --answer-file=/root/openstack-answer-controller.txt
+      creates: /root/keystonerc_admin
+
+  - name: create answer file for compute
+    copy:
+      src: /root/openstack-answer-controller.txt
+      dest: /root/openstack-answer-compute.txt
+      remote_src: true
+
+  - name: compute node config
+    ini_file:
+      path: /root/openstack-answer-compute.txt
+      section: general
+      option: "{{ item[0] }}"
+      value: "{{ item[1] }}"
+      state: present
+    loop:
+      - ["CONFIG_COMPUTE_HOSTS", "{{ com_hosts }}"]
+
+  - name: exec packstack for compute
+    shell:
+      cmd: |
+        packstack --answer-file=/root/openstack-answer-compute.txt

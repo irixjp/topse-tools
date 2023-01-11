@@ -17,4 +17,8 @@ if [ -z "$OS_REGION_NAME" ]; then unset OS_REGION_NAME; fi
 
 unset OS_TENANT_ID
 unset OS_TENANT_NAME
+<<<<<<< HEAD
 unset OS_SERVICE_TOKEN
+=======
+unset OS_SERVICE_TOKEN
+>>>>>>> 2022-01

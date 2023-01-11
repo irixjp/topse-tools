@@ -1,0 +1,136 @@
+- name: Test Pre-configurations
+  hosts: all
+  become: true
+  tasks:
+
+  - name: ping
+    ping:
+
+  - name: disalble selinux
+    shell: |
+      getenforce
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "'Disabled' in ret.stdout"
+
+  - name: nested on
+    shell: |
+      cat /etc/environment
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "'LANG=en_US.utf-8' in ret.stdout"
+        - "'LC_ALL=en_US.utf-8' in ret.stdout"
+
+  - name: connect to reposerver with the NAME(non-IP)
+    shell: |
+      ping -c 1 reposerver
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: remove default repositries
+    shell: |
+      ls /etc/yum.repos.d | grep CentOS
+    register: ret
+    changed_when: false
+    ignore_errors: true
+  - assert:
+      that:
+        - "ret.rc == 1"
+
+  - name: repositry settings
+    shell: |
+      dnf repolist | grep openstack
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: remove cloud-init
+    shell: |
+      rpm -qa |grep cloud-init
+    register: ret
+    changed_when: false
+    ignore_errors: true
+  - assert:
+      that:
+        - "ret.rc == 1"
+
+  - name: disabled NetworkManager
+    shell: |
+      systemctl is-enabled NetworkManager
+    register: ret
+    changed_when: false
+    ignore_errors: true
+  - assert:
+      that:
+        - "'disabled' in ret.stdout"
+
+  - name: enabled network-scripts
+    shell: |
+      systemctl is-enabled network
+    register: ret
+    changed_when: false
+    ignore_errors: true
+  - assert:
+      that:
+        - "'enabled' in ret.stdout"
+
+  - name: installed wget
+    shell: |
+      wget --version
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed crudini
+    shell: |
+      crudini --version
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed vim
+    shell: |
+      vim --version
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: installed kvm
+    shell: |
+      /usr/libexec/qemu-kvm --version
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "ret.rc == 0"
+
+  - name: nested on
+    shell: |
+      cat /sys/module/kvm_intel/parameters/nested
+    register: ret
+    changed_when: false
+  - assert:
+      that:
+        - "'1' in ret.stdout"
+
+  - name: ssh connection test each nodes by root user
+    shell:
+      ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@{{ item }} hostname
+    loop: "{{ hostvars[inventory_hostname]['groups']['all'] }}"
+    changed_when: false
+

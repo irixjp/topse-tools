@@ -1,0 +1,218 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+
+  - name: language config
+    copy:
+      content: |
+        LANG=en_US.utf-8
+        LC_ALL=en_US.utf-8
+      dest: /etc/environment
+
+  - name: internal repo config
+    block:
+      - name: Ansible delete file glob
+        find:
+          paths: /etc/yum.repos.d
+          use_regex: true
+          patterns:
+            - '^CentOS-.*'
+            - '^td.*repo$'
+        register: files_to_delete
+
+      - name: remove default repofiles
+        file:
+          path: "{{ item.path }}"
+          state: absent
+        loop: "{{ files_to_delete.files }}"
+
+      - name: download edubase repofile
+        get_url:
+          url: http://{{ reposerver_ip }}/repos/edubase.repo
+          dest: /etc/yum.repos.d/edubase.repo
+
+      - name: reposerver ip to hosts file
+        lineinfile:
+          dest: /etc/hosts
+          line: '{{ reposerver_ip }} reposerver'
+
+      - name: clean yum cache
+        shell: |
+          dnf clean all
+          dnf repolist
+        changed_when: false
+
+      - name: remove cloud-init
+        dnf:
+          name: cloud-init
+          state: absent
+
+  - name: network config
+    block:
+      - name: install network scripts
+        dnf:
+          name: network-scripts
+          state: latest
+
+      - name: stop & disable NetworkManager
+        systemd:
+          name: NetworkManager
+          state: stopped
+          enabled: false
+
+      - name: enable network-scripts
+        systemd:
+          name: network
+          enabled: true
+
+      - name:  remove network pre-config from cloudinit(this file reset network config file of each interface)
+        file:
+          path: /var/lib/cloud/scripts/per-boot/set_network.sh
+          state: absent
+
+      - name:  remove network pre-config from cloudinit(this file reset network config file of each interface)
+        file:
+          path: /etc/cloud/cloud.cfg.d/custom-networking.cfg
+          state: absent
+
+      - name:  remove default route script
+        file:
+          path: /etc/sysconfig/network-scripts/route-eno2
+          state: absent
+
+      - name: disable no used NIC
+        copy:
+          content: |
+            DEVICE={{ item }}
+            TYPE=Ethernet
+            ONBOOT=no
+            BOOTPROTO=none
+          dest: /etc/sysconfig/network-scripts/ifcfg-{{ item }}
+        loop:
+          - eno1
+          - eno3
+
+      - name: setup eno2
+        copy:
+          content: |
+            TYPE=Ethernet
+            PROXY_METHOD=none
+            BROWSER_ONLY=no
+            BOOTPROTO=static
+            DEFROUTE=yes
+            IPV4_FAILURE_FATAL=no
+            IPV6INIT=yes
+            IPV6_AUTOCONF=yes
+            IPV6_DEFROUTE=yes
+            IPV6_FAILURE_FATAL=no
+            IPV6_ADDR_GEN_MODE=stable-privacy
+            NAME=eno2
+            DEVICE=eno2
+            ONBOOT=yes
+            IPV6_PRIVACY=no
+            IPADDR={{ inventory_hostname }}
+            NETMASK=255.255.254.0
+            GATEWAY=157.1.140.1
+          dest: /etc/sysconfig/network-scripts/ifcfg-eno2
+
+  - name: install common packages
+    dnf:
+      name:
+        - crudini
+        - qemu-kvm
+        - bash-completion
+        - git
+        - wget
+        - vim
+        - jq
+      state: latest
+
+  - name: enabled nested kvm
+    block:
+      - name: create kvm-nested.conf for nested kvm
+        copy:
+          dest: /etc/modprobe.d/kvm-nested.conf
+          owner: root
+          group: root
+          content: |
+            options kvm_intel nested=1
+
+      - name: modprobe -r kvm_intel
+        modprobe:
+          name: kvm_intel
+          state: absent
+
+      - name: modprobe kvm_intel
+        modprobe:
+          name: kvm_intel
+          state: present
+
+  - name: ssh config
+    block:
+      - name: copy authorized_keys from centos to root on remote host
+        copy:
+          remote_src: true
+          src: /home/centos/.ssh/authorized_keys
+          dest: /root/.ssh/authorized_keys
+          owner: root
+          group: root
+          mode: 0600
+
+      - name: permit root login
+        lineinfile:
+          path: /etc/ssh/sshd_config
+          state: present
+          regexp: '^PermitRootLogin '
+          line: 'PermitRootLogin yes'
+
+      - name: copy id_rsa to /root/.ssh/id_rsa
+        copy:
+          src: /root/.ssh/id_rsa
+          dest: /root/.ssh/id_rsa
+          owner: root
+          group: root
+          mode: 0600
+
+      - name: copy id_rsa.pub to /root/.ssh/id_rsa.pub
+        copy:
+          src: /root/.ssh/id_rsa.pub
+          dest: /root/.ssh/id_rsa.pub
+          owner: root
+          group: root
+          mode: 0644
+
+  - name: add all hosts to /etc/hosts
+    blockinfile:
+      path: /etc/hosts
+      block: |
+        {% for i in vars.ansible_play_hosts_all | sort %}
+        {{ hostvars[i].inventory_hostname }} {{ hostvars[i].ansible_fqdn }} {{ hostvars[i].ansible_hostname }}
+        {% endfor %}
+
+  - name: dnf update -y
+    dnf:
+      name: "*"
+      state: latest
+
+  - name: remove repo files again that updated by dnf update all
+    block:
+      - name: Ansible delete file glob
+        find:
+          paths: /etc/yum.repos.d
+          use_regex: true
+          patterns:
+            - '^CentOS-.*'
+            - '^td.*repo$'
+        register: files_to_delete
+
+      - name: remove default repofiles
+        file:
+          path: "{{ item.path }}"
+          state: absent
+        loop: "{{ files_to_delete.files }}"
+
