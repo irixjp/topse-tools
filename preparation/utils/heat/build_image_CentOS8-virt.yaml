@@ -75,7 +75,7 @@ resources:
     type: OS::Nova::Server
     properties:
       name: handson-image-CentOS8-virt
-      image: CentOS8
+      image: CentOS8-openstack
       flavor: m1.small
       key_name: key-for-build
       networks:

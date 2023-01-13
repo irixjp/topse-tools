@@ -1,0 +1,126 @@
+heat_template_version: 2018-08-31
+
+description: Creating Handson image
+
+parameters:
+  reposerver:
+    type: string
+    label: hands-on repository server
+    description: Teahcer will give the specific ip address.
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 3600
+
+  neutron-port:
+    type: OS::Neutron::Port
+    properties:
+      network: build-net
+      fixed_ips:
+        - ip_address: 192.168.188.101
+      security_groups:
+        - open-all
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron-port }
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        timezone: Asia/Tokyo
+
+  config_set_reposerver:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            REPOSERVER=__heat_reposerver_ip
+            dnf clean all
+            rm -rf /etc/yum.repos.d/CentOS-Linux-*
+            curl -o /etc/yum.repos.d/edubase.repo http://${REPOSERVER}/repos/edubase.repo
+            echo "${REPOSERVER} reposerver" >> /etc/hosts
+            if ping -c 1 reposerver &> /dev/null
+            then
+              echo connecting reposerver
+            else
+              __heat_wc_notify --data-binary '{"status": "FAILURE"}'
+              exit 1
+            fi
+            dnf repolist
+
+  config_init_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            echo "LANG=en_US.utf-8" > /etc/environment
+            echo "LC_ALL=en_US.utf-8" >> /etc/environment
+            dnf update -y
+            dnf install -y network-scripts
+            systemctl stop NetworkManager
+            systemctl disable NetworkManager
+            systemctl enable network
+            modprobe -r kvm_intel
+            modprobe kvm_intel
+            rm -rf /etc/sysconfig/network-scripts/ifcfg-ens*
+            dnf clean all
+
+  config_send_notify_after_settings:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+            sleep 3
+            shutdown -h now
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_set_reposerver }
+      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_send_notify_after_settings }
+
+  instance1:
+    type: OS::Nova::Server
+    properties:
+      name: handson-image-CentOS8-base
+      image: CentOS8-orig
+      flavor: m1.small
+      key_name: key-for-build
+      networks:
+        - port: { get_resource: neutron-port }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
