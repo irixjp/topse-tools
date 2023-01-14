@@ -44,12 +44,9 @@ resources:
             #!/bin/bash -ex
             dnf install -y wget crudini vim bash-completion qemu-kvm libvirt virt-manager virt-install jq
             systemctl start libvirtd
-            virsh net-destroy default
+            sleep 10
             virsh net-undefine default
-            systemctl restart libvirtd
-            yum groupinstall -y "Workstation"
-            systemctl set-default graphical.target
-            systemctl start openvswitch
+            dnf groupinstall -y "Workstation"
             dnf clean all
 
   config_send_notify_after_settings:

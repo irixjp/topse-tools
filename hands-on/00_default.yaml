@@ -137,6 +137,7 @@ resources:
             python3-openstackclient \
             python3-heatclient \
             jq wget vim crudini bash-completion git
+            openstack complete > /etc/bash_completion.d/osc.bash_completion
 
             wget reposerver/hands-on/openrc -O /home/centos/openrc
             chown centos:centos /home/centos/openrc

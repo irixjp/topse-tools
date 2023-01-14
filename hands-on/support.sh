@@ -7,3 +7,5 @@ function get_reposerver () {
 function get_heat_output () {
     heat output-show $1 $2 | python -c "import sys; print(input())"
 }
+
+export CLIFF_MAX_TERM_WIDTH=$(expr $(tput cols) - 20)
