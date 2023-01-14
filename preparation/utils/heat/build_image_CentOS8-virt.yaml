@@ -47,6 +47,7 @@ resources:
             sleep 10
             virsh net-undefine default
             dnf groupinstall -y "Workstation"
+            systemctl set-default graphical.target
             dnf clean all
 
   config_send_notify_after_settings:
