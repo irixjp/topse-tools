@@ -18,7 +18,7 @@ resources:
     properties:
       network: build-net
       fixed_ips:
-        - ip_address: 192.168.188.102
+        - ip_address: 192.168.188.103
       security_groups:
         - open-all
 
