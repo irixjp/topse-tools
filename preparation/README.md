@@ -39,7 +39,7 @@ eno3 使わない
 
 全て `root` で実施
 
-### 最新化・必要パッケージのインストール、リポジトリのURLが変更されているので調整する
+### 必要パッケージのインストール、リポジトリのURLが変更されているので調整する
 
 ```
 sudo -i
@@ -51,6 +51,7 @@ dnf repolist
 dnf install -y tmux
 dnf install -y podman git
 podman pull irixjp/topse-cloud-repo:train-v1.4
+podman pull irixjp/topse-cloud-repo:newton-v2.0
 
 cd /mnt
 git clone https://github.com/irixjp/topse-tools.git

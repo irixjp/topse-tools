@@ -25,7 +25,7 @@ parameters:
     type: string
     label: Key name
     description: Name of key-pair to be installed on the compute instance.
-    default: my-key
+    default: handson05-key
 
   ip1:
     type: string
