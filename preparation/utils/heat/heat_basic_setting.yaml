@@ -25,7 +25,7 @@ resources:
           end: 157.1.141.200
       cidr: 157.1.140.0/23
       enable_dhcp: False
-      gateway_ip: 192.168.122.1
+      gateway_ip: 157.1.140.1
       ip_version: 4
       network: { get_resource: public-net }
 

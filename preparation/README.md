@@ -50,6 +50,7 @@ dnf clean all
 dnf repolist
 dnf install -y tmux
 dnf install -y podman git
+
 podman pull irixjp/topse-cloud-repo:train-v1.4
 podman pull irixjp/topse-cloud-repo:newton-v2.0
 
@@ -57,8 +58,6 @@ cd /mnt
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2022-01
-git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 git branch
 
 podman run -d -p 80:80 --name train-repo \
@@ -70,12 +69,13 @@ dnf install -y centos-release-ansible-29.noarch
 dnf install -y ansible
 ```
 
-repo サーバーのSELinuxを無効（コンテナからホストディレクトリにアクセスさせるため）
+### repo サーバーのSELinuxを無効（コンテナからホストディレクトリにアクセスさせるため）
 
 ``` bash
 sed -i 's/^SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
 setenforce 0
 ```
+
 
 ### hosts を更新
 
@@ -94,22 +94,11 @@ xxx.x.xxx.xx com3
 cd ~/
 ssh-keygen -P '' -f ~/.ssh/id_rsa
 cat ~/.ssh/id_rsa.pub
+↑ この鍵をccとcomの centos ユーザーの authorized_keys に登録する
 
+登録後に動作確認
 ansible all -i cc,com1,com2, -b -u centos -m ping -o
 ```
-
-
-### kipmi が CPU100%になる場合のワークアラウンド(多分不要)
-
-```
-# プロセス/CPUの確認
-ansible openstack-all -u root -m shell -a 'top -b -n 1 | grep kipmi'
-ansible openstack-all -u root -m shell -a 'vmstat 1 10'
-
-# もし100%だったら実行
-ansible openstack-all -u root -m shell -a 'echo 100 > /sys/module/ipmi_si/parameters/kipmid_max_busy_us'
-```
-
 
 OpenStackのデプロイ
 ------------
@@ -129,16 +118,14 @@ vi nii_hosts
 
 `-f` で台数分以上にFORKさせる（早く終る
 
-一発で終わらせる場合（非推奨）
 ```
 FORK=20
 
 cd /mnt/topse-tools/preparation/
-ansible-playbook -f ${FORK:?} site.yml
+
+ansible-playbook -i nii_hosts <01,02,03,04,05,06> or site.yml
 ```
 
-
-以下、編集中 2023-01-10
 
 構築したOpenStack環境の基礎設定
 ------------
@@ -148,15 +135,6 @@ ansible-playbook -f ${FORK:?} site.yml
 ### 状態の確認（エラーがなければOK）
 
 ```
-sudo -i
-cd ~/
-git clone https://github.com/irixjp/topse-tools.git
-cd topse-tools/
-
-BRANCH_NAME=2022-01
-git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
-git branch
-
 cd ~/
 source keystonerc_admin
 
@@ -164,26 +142,13 @@ nova service-list
 cinder service-list
 openstack orchestration service list
 neutron agent-list
+
+openstack complete > /etc/bash_completion.d/osc.bash_completion
 ```
 
 ### 基本設定の投入
 
-`topse-tools/preparation/utils/heat/heat_basic_setting.yaml` で Floating IPのレンジをとパスワードを設定しておく。
-
 ```
-cd ~/topse-tools/preparation/utils/heat
-heat stack-create --poll -f heat_basic_setting.yaml default
-```
-
-### クォータ、フレーバー、イメージの設定
-
-```
-# テスト用テナント
-openstack quota set --instances 1000 --floating-ips 100 --ram 8192000 --volumes 100 --gigabytes 300 --cores 1000 --ports 1000 topse01
-
-# 演習用のユーティリティ提供テナント
-openstack quota set --instances 5 --floating-ips 2 --ram 40960 --volumes 10 --gigabytes 10 --cores 20 topse02
-
 nova flavor-delete 1
 nova flavor-delete 2
 nova flavor-delete 3
@@ -196,149 +161,232 @@ nova flavor-create m1.medium 102 4096 20  1
 nova flavor-create m1.large  103 8192 100 2
 nova flavor-create m1.xlarge 104 8192 200 4
 
-cd ~/
-curl -o CentOS-7-x86_64-GenericCloud.qcow2 http://reposerver/images/CentOS-7-x86_64-GenericCloud.qcow2
-openstack image create --disk-format qcow2 --container-format bare \
-                       --file CentOS-7-x86_64-GenericCloud.qcow2 \
-                       --protected --public \
-                       CentOS7
+mkdir ~/work && cd ~/work
+curl -O reposerver/images/CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2
+openstack image create \
+    --container-format bare --disk-format qcow2 \
+    --min-disk 10 --min-ram 1024 --public \
+    --file CentOS-8-GenericCloud-8.3.2011-20201204.2.x86_64.qcow2 \
+    CentOS8-orig
 
 openstack image list
+```
+
+`heat_basic_setting.yaml` で Floating IPのレンジをとパスワードを設定する
+
+```
+cd ~/work
+curl -O reposerver/preparation/utils/heat/heat_basic_setting.yaml
+
+vi heat_basic_setting.yaml
+
+time openstack stack create --wait -t heat_basic_setting.yaml default
+```
+
+ワークアラウンド
+------------
+
+`Failed to compute_task_build_instances: Host  is not mapped to any cell: nova.exception.HostMappingNotFound: Host  is not mapped to any cell` というエラーが出る場合あるため。参考(https://bugs.launchpad.net/nova/+bug/1693979)
+
+``` bash
+nova-manage cell_v2 simple_cell_setup
+```
+
+
+イメージ作成
+------------
+
+``` bash
+cd ~/work
+curl -O reposerver/preparation/utils/heat/build_image_base_env.yaml
+time openstack stack create --wait -t build_image_base_env.yaml build-image-env
+openstack stack output show build-image-env base_env -f json | jq -r .output_value.private_key > build-image-key.pem
+chmod 600 build-image-key.pem
+
+
+REPOSERVER_IP=157.1.141.14
+
+
+curl -O reposerver/preparation/utils/heat/build_image_CentOS8-base.yaml
+time openstack stack create --wait -t build_image_CentOS8-base.yaml --parameter reposerver=${REPOSERVER_IP:?} build-image-CentOS8-base
+
+>>> 目安の時間
+real    7m3.378s
+user    0m1.695s
+sys     0m0.115s
+<<<
+
+watch -n 5 openstack server list
+openstack server image create --wait --name CentOS8-base handson-image-CentOS8-base
+
+openstack image list
+openstack stack delete -y build-image-CentOS8-base
+
+curl -O reposerver/preparation/utils/heat/build_image_CentOS8-openstack.yaml
+time openstack stack create --wait -t build_image_CentOS8-openstack.yaml build-image-CentOS8-openstack
+>>>
+real    6m22.296s
+user    0m1.670s
+sys     0m0.083s
+<<<
+
+watch -n 5 openstack server list
+openstack server image create --wait --name CentOS8-openstack handson-image-CentOS8-openstack
+
+openstack image list
+openstack stack delete -y build-image-CentOS8-openstack
+
+curl -O reposerver/preparation/utils/heat/build_image_CentOS8-virt.yaml
+time openstack stack create --wait -t build_image_CentOS8-virt.yaml build-image-CentOS8-virt
+>>>
+real    6m22.296s
+user    0m1.670s
+sys     0m0.083s
+<<<
+
+watch -n 5 openstack server list
+openstack server image create --wait --name CentOS8-virt handson-image-CentOS8-virt
+
+openstack image list
++--------------------------------------+-------------------+--------+
+| ID                                   | Name              | Status |
++--------------------------------------+-------------------+--------+
+| efeb4a4f-178e-4bf6-9aa9-42278a9f33b2 | CentOS8-base      | active |
+| 9fb8307a-e554-44d1-a237-dc75399c7b95 | CentOS8-openstack | active |
+| c64a265f-4c1e-49e8-ab2c-d4633af33972 | CentOS8-orig      | active |
+| c3aca1ba-c71b-459a-87e0-86d392dee9f1 | CentOS8-virt      | active |
++--------------------------------------+-------------------+--------+
+
+openstack stack delete -y build-image-CentOS8-virt
+
+openstack image set --protected --public CentOS8-orig
+openstack image set --protected --public CentOS8-base
+openstack image set --protected --public CentOS8-virt
+openstack image set --protected --public CentOS8-openstack
+```
+
+イメージの動作確認
+
+``` bash
+openstack server create test-vm-base --network build-net --flavor m1.small --image CentOS8-base --key-name key-for-build --security-group open-all
+openstack server create test-vm-openstack --network build-net --flavor m1.small --image CentOS8-openstack --key-name key-for-build --security-group open-all 
+openstack server create test-vm-virt --network build-net --flavor m1.large --image CentOS8-virt --key-name key-for-build --security-group open-all 
+
+openstack floating ip create public
+openstack floating ip create public
+openstack floating ip create public
+openstack floating ip list
+
+openstack server add floating ip test-vm-base <fip>
+openstack server add floating ip test-vm-openstack <fip>
+openstack server add floating ip test-vm-virt <fip>
+
+openstack server list
+
+ssh -i build-image-key.pem centos@xxxx
+ssh -i build-image-key.pem centos@xxxx
+ssh -i build-image-key.pem centos@xxxx
+
+openstack server delete test-vm-base test-vm-openstack test-vm-virt
+openstack floating ip list
+openstack floating ip delete
+
+openstack stack delete --wait -y build-image-env
 ```
 
 
 環境のテスト
 ------------
 
-### リソース作成テスト1
-
 - 作成したコンソールサーバーへログインできればOK。
 
-`openrc_teacher01` `openrc_teacher02` のエンドポイント、パスワードを設定しておく。
-
-テストを実行するコンソールサーバーを起動する。
-
-```
-cd ~/topse-tools/preparation/utils/heat
+``` bash
+mkdir -p ~/teacher01
+cd ~/teacher01
+curl -O reposerver/preparation/utils/heat/openrc_teacher01
+vim openrc_teacher01
 source openrc_teacher01
-nova list
 
-# 環境に合わせて変更
-HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.13
+curl -O reposerver/hands-on/00_default.yaml
+time openstack stack create --wait -t 00_default.yaml --parameter password=password console
+>>>
+real    1m38.499s
+user    0m1.224s
+sys     0m0.095s
+<<<
 
-heat stack-create --poll -f test_default.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" test_console
+CONSOLE_IP=`openstack stack output show console info -f json | jq -r .output_value.floating_ip`
+
+scp openrc_teacher01 centos@${CONSOLE_IP:?}:~/openrc
+ssh centos@${CONSOLE_IP:?}
 ```
 
-コンソールにログインしてテストの実施準備。パスワードは上記で設定した値。
-
-```
-CONSOLE=`heat output-show test_console console | python -c "import json,sys; print json.load(sys.stdin).get('floating_ip')"`; echo $CONSOLE
-
-ssh centos@${CONSOLE}
-
-git clone https://github.com/irixjp/topse-tools.git
-cd topse-tools/
-
-BRANCH_NAME=2022-01
-git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
-git branch
-```
-
-`openrc_teacher01` のエンドポイントとパスワードを設定しておく。
-
-```
-cd preparation/utils/heat/
-source openrc_teacher01
-source ../../../hands-on/support.sh
-nova list
-```
-
-### リソース作成テスト2
-
-全フレーバーで全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。250台を超えるとNWセグメントが枯渇するので、50より上にしないようにする。
+全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。250台を超えるとNWセグメントが枯渇するので、50より上にしないようにする。
 
 - 全コンピュートに分散するか？
 - オーバーコミットが正しく設定されているか？
 - 全台起動できているか？(CLUSTER x 5 台起動するはず)
 
-```bash
-CLUSTER=30
-heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.tiny" test_massive1
-heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.small" test_massive2
-heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.medium" test_massive3
-heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.large" test_massive4
-heat stack-create --poll -f test_massive_resource.yaml -P "cluster_size=${CLUSTER}" -P "flavor=m1.xlarge" test_massive5
+``` bash
+curl -O reposerver/preparation/utils/heat/test_massive_resource.yaml
+curl -O reposerver/preparation/utils/heat/test_simple_server.yaml
 
-heat stack-list
-nova list
-nova list | grep test_massive |grep Running | wc -l
-nova-manage vm list  # CC で実施する
+CLUSTER_SIZE=5
+for flavor in "small" "medium" "large" "xlarge"
+do
+    for image in "CentOS8-base" "CentOS8-openstack" "CentOS8-virt"
+    do
+        openstack stack create --wait -t test_massive_resource.yaml \
+                  --parameter cluster_size=${CLUSTER_SIZE} \
+                  --parameter flavor=m1.${flavor} \
+                  --parameter image=${image} \
+                  massive_${image}_${flavor}
+    done
+done
 ```
 
-ping を飛ばす。出力が全部0ならOK。
+ping 送信テスト（全部0なら成功）
 
-```bash
-for i in `nova list |grep massive |awk '{print $12}' | awk -F'=' '{print $2}'`; do ping -c 1 > /dev/null $i; echo -n $?; done
+``` bash
+openstack server list --long --all-project -c "Name" -c "Power State" -c "Image Name" -c "Flavor Name" -c "Host"
+
+for i in `nova list |grep ma- |awk '{print $12}' | awk -F'=' '{print $2}'`; do ping -c 1 > /dev/null $i; echo -n $?; done
 ```
 
-```bash
-heat stack-delete -y test_massive1
-heat stack-delete -y test_massive2
-heat stack-delete -y test_massive3
-heat stack-delete -y test_massive4
-heat stack-delete -y test_massive5
+削除
+
+``` bash
+for flavor in "small" "medium" "large" "xlarge"
+do
+    for image in "CentOS8-base" "CentOS8-openstack" "CentOS8-virt"
+    do
+        openstack stack delete -y massive_${image}_${flavor}
+    done
+done
 ```
 
-### リソース作成テスト3
-
-Heat, LBaaS が正常に稼働しているか確認。
-
-- curl している部分でラウンドロビンされたトップページが表示されればOK
-- Cluster Size を変更してもちゃんとオートスケールされることを確認する（前に UPDATE\_IN\_PROGRESS のまま進まないときがあった）
-
-```
-repo=`get_reposerver`; echo $repo
-heat stack-create --poll -f test_cluster.yaml -P "reposerver=${repo}" test_cluster
-
-URL=`get_heat_output test_cluster lburl`; echo $URL
-for i in `seq 1 20`; do curl $URL; sleep 1; done
-
-heat stack-update -f test_cluster.yaml -P "reposerver=${repo}" -P cluster_size=6 test_cluster
-heat stack-list
-for i in `seq 1 60`; do curl $URL; sleep 2; done
-
-heat stack-delete -y test_cluster
-```
-
-### リソース作成テスト4
 
 スタックのアップグレードでフレーバーの変更ができるか確認。`allow_resize_to_same_host` と Migration 設定がうまく行っていないと RESIZE時に UPDATE\_IN\_PROGRESS のまま失敗する。
 
 参考にしたページ：https://qiita.com/kentarosasaki/items/9c0b6c9200bf424311f9
 
-* 6/23 selinux の影響で、/var/lib/nova/.ssh/ の鍵が読み込めずに、resize 等が失敗する現象に遭遇。どのポリシーを適用すればいいのかわからなかったので、とりあえず `setenforce 0` で対処。再起動すると同じ現象になるので、再度 `setenforce` する。
-
 - フレーバーの変更ができればOK。
 
+``` bash
+openstack stack create --wait -t test_simple_server.yaml --parameter image=CentOS8-base --parameter flavor=m1.small update_resize
+
+openstack stack update -t test_simple_server.yaml --parameter image=CentOS8-base --parameter flavor=m1.medium update_resize
+watch -d -n 5 'openstack stack list && openstack server list'
+
+openstack stack update -t test_simple_server.yaml --parameter image=CentOS8-base --parameter flavor=m1.large update_resize
+watch -d -n 5 'openstack stack list && openstack server list'
+
+openstack stack update -t test_simple_server.yaml --parameter image=CentOS8-base --parameter flavor=m1.xlarge update_resize
+watch -d -n 5 'openstack stack list && openstack server list'
+
+openstack stack delete -y update_resize
 ```
-heat stack-create -f test_simple_server.yaml -P "flavor=m1.tiny" test_update_stack
-nova list; heat stack-list
 
-heat stack-update -f test_simple_server.yaml -P "flavor=m1.small" test_update_stack
-nova list; heat stack-list
-
-heat stack-update -f test_simple_server.yaml -P "flavor=m1.medium" test_update_stack
-nova list; heat stack-list
-
-heat stack-update -f test_simple_server.yaml -P "flavor=m1.large" test_update_stack
-nova list; heat stack-list
-
-heat stack-update -f test_simple_server.yaml -P "flavor=m1.xlarge" test_update_stack
-nova list; heat stack-list
-
-heat stack-delete -y test_update_stack
-```
 
 ### 環境の削除
 
@@ -346,7 +394,8 @@ heat stack-delete -y test_update_stack
 
 ```
 exit
-heat stack-delete -y test_console
+openstack stack delete -y console
+openstack stack list
 ```
 
 
@@ -365,10 +414,6 @@ unset OS_VOLUME_API_VERSION
 unset OS_IDENTITY_API_VERSION
 unset OS_USER_DOMAIN_NAME
 unset OS_PROJECT_DOMAIN_NAME
-
-cd ~/topse-tools/preparation/
-source ~/keystonerc_admin
-nova list --all
 ```
 
 ### テスト用の生徒アカウントを作成
@@ -376,11 +421,32 @@ nova list --all
 演習が正しく実施できるかは、このユーザーで確かめる。
 
 ```
-bash ./10_add_test_student.sh
+cd
+source keystonerc_admin
+openstack project list
+openstack user list
+
+cd ~/work
+curl -O reposerver/preparation/90_add_test_student.sh
+bash ./90_add_test_student.sh
 
 openstack project list
 openstack user list
 ```
+
+### Etherpad の起動（repoサーバー上で実施）
+
+``` bash
+EP_USER=topse
+EP_PASS=openstack
+
+podman run -d -p 8443:8443 -p 8080:8080 --name eplite -e EP_USER=${EP_USER:?} -e EP_PASS=${EP_PASS:?} irixjp/eplite:latest
+```
+
+
+
+以下は削除予定（古い内容）
+------------
 
 ### Docker イメージの作成
 
