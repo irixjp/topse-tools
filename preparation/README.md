@@ -24,6 +24,8 @@ tmpfs            63G     0   63G   0% /sys/fs/cgroup
 tmpfs            13G     0   13G   0% /run/user/1000
 ```
 
+* Note: MacOSから ssh centos@xxx すると、「sign_and_send_pubkey: no mutual signature supported」となり接続できなくなっている。`ssh -o 'PubkeyAcceptedKeyTypes +ssh-rsa'` をつけるとOK。
+
 
 準備 - テスト環境の構築(リポジトリサーバーで実施する)
 ------------
@@ -70,7 +72,7 @@ cd /mnt
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2020-01
+BRANCH_NAME=2023-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 mkdir -p /mnt/dvd
@@ -290,7 +292,7 @@ cd ~/
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2020-01
+BRANCH_NAME=2023-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 cd ~/
@@ -376,7 +378,7 @@ ssh centos@${CONSOLE}
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2020-01
+BRANCH_NAME=2023-01
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 ```
 
@@ -549,7 +551,7 @@ ssh centos@${CONSOLE}
 sudo -i
 docker ps -a
 
-docker pull jenkins
+docker pull jenkins:2.60.3
 docker pull redmine
 docker pull centos:6
 docker pull centos:7
