@@ -26,6 +26,7 @@ tmpfs            13G     0   13G   0% /run/user/1000
 
 * Note: MacOSから ssh centos@xxx すると、「sign_and_send_pubkey: no mutual signature supported」となり接続できなくなっている。`ssh -o 'PubkeyAcceptedKeyTypes +ssh-rsa'` をつけるとOK。
 
+* Note: `/etc/ssh/sshd_config` の `UseDNS no` にしておくとのVPN経由の接続が早くなる。
 
 準備 - テスト環境の構築(リポジトリサーバーで実施する)
 ------------
@@ -72,13 +73,13 @@ cd /mnt
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2023-01
+BRANCH_NAME=2024-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 mkdir -p /mnt/dvd
 ```
 
-### 認証キーの作成
+### 認証キーの作成(後で使う)
 
 ```
 cd preparation/utils
@@ -89,7 +90,7 @@ ssh-keygen -f ansible_key -P '' -t rsa
 ### リポジトリコンテナの起動
 
 ```
-IMAGE_VERSION=newton-v2.0
+IMAGE_VERSION=newton-v2.1
 docker run -d -p 80:80 \
        --name repo \
        -v /mnt/topse-tools/hands-on:/var/www/html/hands-on \
@@ -292,7 +293,7 @@ cd ~/
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2023-01
+BRANCH_NAME=2024-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 
 cd ~/
@@ -378,7 +379,7 @@ ssh centos@${CONSOLE}
 git clone https://github.com/irixjp/topse-tools.git
 cd topse-tools/
 
-BRANCH_NAME=2023-01
+BRANCH_NAME=2024-02
 git checkout -b ${BRANCH_NAME} remotes/origin/${BRANCH_NAME}
 ```
 
@@ -393,7 +394,7 @@ nova list
 
 ### リソース作成テスト2
 
-全フレーバーで全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。250台を超えるとNWセグメントが枯渇するので、50より上にしないようにする。
+全フレーバーで全フレーバーが起動できるかテスト。`CLUSTER` の数はコンピュートノード台数 x 5 にする。ついでに全ノードにNovaのイメージをキャッシュさせる。150台を超えるとNWセグメントが枯渇するので、30より上にしないようにする。
 
 - 全コンピュートに分散するか？
 - オーバーコミットが正しく設定されているか？
@@ -532,7 +533,7 @@ openstack image delete Docker
 
 ```
 HEAT_PASSWD=password
-HEAT_REPOIP=157.1.141.11
+HEAT_REPOIP=157.1.141.19
 
 cd ~/topse-tools/preparation/utils/heat
 heat stack-create --poll -f build_docker_image.yaml -P "password=${HEAT_PASSWD:?}" -P "reposerver=${HEAT_REPOIP:?}" docker-image-build
@@ -551,16 +552,64 @@ ssh centos@${CONSOLE}
 sudo -i
 docker ps -a
 
-docker pull jenkins:2.60.3
-docker pull redmine
-docker pull centos:6
-docker pull centos:7
+# 以下はバージョン固定したイメージを作成したときの pull 状況
+#docker pull jenkins:2.60.3
+#docker pull redmine:4.2.9
+#docker pull centos:6
+#docker pull centos:7
+#docker pull minio/minio:RELEASE.2022-08-02T23-59-16Z.fips
+
+#docker tag cdde45ae33da redmine:latest
+#docker tag cd14cecfdb3a jenkins:latest
+#docker tag 42860dd37a0e minio/minio:latest
+
+#
+# docker save jenkins:2.60.3 | gzip -d > jenkins.tar.gz
+# docker save redmine:4.2.9  | gzip -d > redmine.tar.gz
+# docker save minio/minio:RELEASE.2022-08-02T23-59-16Z.fips | gzip -d > minio.tar.gz
+# docker save centos:6 | gzip -d > centos6.tar.gz
+# docker save centos:7 | gzip -d > centos7.tar.gz
+
+curl -O reposerver/images/centos6.tar.gz
+curl -O reposerver/images/centos7.tar.gz
+curl -O reposerver/images/jenkins.tar.gz
+curl -O reposerver/images/redmine.tar.gz
+curl -O reposerver/images/minio.tar.gz
+
+cat centos6.tar.gz | gzip -d | docker load
+docker tag 5bf9684f4720 centos:6
+
+cat centos7.tar.gz | gzip -d | docker load
+docker tag eeb6ee3f44bd centos:7
+
+cat jenkins.tar.gz | gzip -d | docker load
+docker tag cd14cecfdb3a jenkins:latest
+
+cat redmine.tar.gz | gzip -d | docker load
+docker tag cdde45ae33da redmine:latest
+
+cat minio.tar.gz | gzip -d | docker load
+docker tag 42860dd37a0e minio/minio:latest
+
 docker pull enakai00/eplite:ver1.0
 docker pull enakai00/epmysql:ver1.0
-docker pull minio/minio
 
 docker images
+```
 
+起動テスト
+```
+docker run -itd -p 9000:9000 -p 9001:9001 --name minio1 -e "MINIO_ROOT_USER=minio" -e "MINIO_ROOT_PASSWORD=minio123" -v /tmp/data:/data -v /tmp/config:/root/.minio minio/minio server /data --console-address ":9001"
+
+docker run -d --name jenkins1 -p 8080:8080 -p 50000:50000 jenkins
+
+docker run -d --name redmine1 -p 3000:3000 --security-opt seccomp=unconfined redmine
+
+docker ps
+docker stop jenkins1 redmine1 minio1
+docker rm jenkins1 redmine1 minio1
+
+docker ps -a
 shutdown -h now
 ```
 
