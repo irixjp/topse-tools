@@ -2,7 +2,7 @@
 
 # Install minio
 mkdir -p /opt/{minio/bin,minio/data}
-curl -o /opt/minio/bin/minio https://dl.minio.io/server/minio/release/linux-amd64/minio
+cd /opt/minio/bin/ && curl -OL https://dl.minio.io/server/minio/release/linux-amd64/minio
 chmod +x /opt/minio/bin/minio
 
 # Get endpoint from metadata
