@@ -8,7 +8,7 @@ parameters:
     type: string
     label: Image name or ID
     description: Image to be used for the server.
-    default: CentOS8
+    default: CentOS7
 
   flavor:
     type: string

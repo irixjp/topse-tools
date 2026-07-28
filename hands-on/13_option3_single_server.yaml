@@ -1,0 +1,130 @@
+heat_template_version: 2015-10-15
+
+description: A load-balancer server
+
+parameters:
+  image:
+    type: string
+    description: Image used for servers
+  key:
+    type: string
+    description: SSH key to connect to the servers
+  flavor:
+    type: string
+    description: flavor used by the servers
+  private_network:
+    type: string
+    description: Network used by the server
+  private_subnet:
+    type: string
+    description: Sub-network used by the server
+  sec_group:
+    type: string
+    description: Security Group used by the server
+  app_port:
+    type: string
+    description: Number of web app port
+  pool:
+    type: string
+    description: Pool to contact
+  reposerver:
+    type: string
+    description: Teahcer will give the specific ip address.
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 600
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: password
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_set_reposerver:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_reposerver_ip: { get_param: reposerver }
+          template: |
+            #!/bin/bash -ex
+            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
+            rm -f /etc/yum.repos.d/CentOS*
+            rm -f /etc/yum.repos.d/epel*
+            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
+            yum clean all
+            yum repolist
+
+  config_simple_web:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $_PORT: { get_param: app_port }
+          template: |
+            #!/bin/bash
+            yum install -y httpd
+            systemctl start httpd
+            hostname > /var/www/html/index.html
+
+  config_send_notify_after_settings:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_set_reposerver }
+      - config: { get_resource: config_simple_web }
+      - config: { get_resource: config_send_notify_after_settings }
+
+  server:
+    type: OS::Nova::Server
+    properties:
+      flavor: { get_param: flavor }
+      image: { get_param: image }
+      key_name: { get_param: key }
+      user_data_format: RAW
+      user_data: { get_resource: server_init }
+      networks:
+        - network: { get_param: private_network }
+      security_groups:
+        - { get_param: sec_group }
+
+  member:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      pool: { get_param: pool }
+      address: { get_attr: [ server, first_address ] }
+      protocol_port: { get_param: app_port }
+      subnet: { get_param: private_subnet }
+
+outputs:
+  server_ip:
+    description: IP Address of the load-balanced server.
+    value: { get_attr: [ server, first_address ] }
+  lb_member:
+    description: LB member details.
+    value: { get_attr: [ member, show ] }

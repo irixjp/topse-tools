@@ -23,7 +23,7 @@ parameters:
 
   image:
     type: string
-    default: CentOS8
+    default: CentOS7
 
   flavor:
     type: string
