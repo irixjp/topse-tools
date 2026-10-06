@@ -1,0 +1,7 @@
+[openstack_cc]
+192.168.199.150
+
+[all:vars]
+ansible_user=centos
+ansible_password=password
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'

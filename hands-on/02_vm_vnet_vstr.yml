@@ -1,0 +1,185 @@
+heat_template_version: 2015-04-30
+
+description: 02-04th Hands-on Environment
+
+parameters:
+  password:
+    type: string
+    label: Server password
+    description: You set your password on your instances.
+    default: password
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 2
+      timeout: 600
+
+  security_group_open_all:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: handson02-open-all
+      description: Allow all ICMP, TCP, UDP ingress
+      rules:
+        - protocol: icmp
+          direction: ingress
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          direction: ingress
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: udp
+          direction: ingress
+          remote_ip_prefix: 0.0.0.0/0
+
+  neutron_port_virt_eth0:
+    type: OS::Neutron::Port
+    properties:
+      name: handson02-virt-eth0
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.10
+      security_groups:
+        - { get_resource: security_group_open_all }
+
+  neutron_port_vnet_eth0:
+    type: OS::Neutron::Port
+    properties:
+      name: handson02-vnet-eth0
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.11
+      security_groups:
+        - { get_resource: security_group_open_all }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron_port_vnet_eth0 }
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_param: password }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_send_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_vnet:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        systemctl enable target.service
+        systemctl start target.service
+        systemctl enable iscsid.service
+        systemctl start iscsid.service
+        systemctl enable httpd.service
+        systemctl start httpd.service
+
+  config_virt:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        systemctl set-default graphical.target
+        systemctl isolate graphical.target &
+
+  config_prompt_virt:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        cat << EOF > /etc/profile.d/prompt.sh
+        export PS1='\[\e[1;36m\][VIRT]\[\e[0m\] \u@\h \W\$ '
+        EOF
+
+  config_prompt_vnet:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        cat << EOF > /etc/profile.d/prompt.sh
+        export PS1='\[\e[1;36m\][VNET]\[\e[0m\] \u@\h \W\$ '
+        EOF
+
+  server_init_virt:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_prompt_virt }
+      - config: { get_resource: config_virt }
+      - config: { get_resource: config_send_notify }
+
+  server_init_vnet:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_prompt_vnet }
+      - config: { get_resource: config_vnet }
+      - config: { get_resource: config_send_notify }
+
+  instance_virt:
+    type: OS::Nova::Server
+    properties:
+      name: handson02-virt
+      image: centos7-virt
+      flavor: m1.large
+      networks:
+        - port: { get_resource: neutron_port_virt_eth0 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_virt }
+
+  instance_vnet:
+    type: OS::Nova::Server
+    properties:
+      name: handson02-vnet
+      image: centos7-openstack
+      flavor: m1.large
+      networks:
+        - port: { get_resource: neutron_port_vnet_eth0 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_vnet }
+
+outputs:
+  instance1:
+    description: server information
+    value:
+      name: { get_attr: [ instance_virt, name ] }
+      ip_address: { get_attr: [ neutron_port_virt_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: ""
+
+  instance2:
+    description: server information
+    value:
+      name: { get_attr: [ instance_vnet, name ] }
+      ip_address: { get_attr: [ neutron_port_vnet_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+
+  password:
+    description: server password for user "centos"
+    value: { get_param: password }

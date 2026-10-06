@@ -1,0 +1,285 @@
+# 08 で構築した入れ子の OpenStack（single）の動作確認。
+# console から実行する:
+#   ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_test_playbook.yml
+# 確認後にリソースを消す場合は -e cleanup=true を付けて再実行する。
+#
+# 演習では、母艦の OpenStack は openstack コマンド、入れ子の OpenStack（Newton）は
+# nova / neutron / cinder コマンドで操作して区別する。この playbook も入れ子の操作に
+# openstack コマンドを使わない（イメージの登録だけ glance コマンドを使う）。
+
+- name: Test nested OpenStack (single)
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  vars:
+    repo_host: reposerver-centos7
+    image_name: cirros
+    image_url: "http://{{ repo_host }}/images/cirros-x86_64-disk.img"
+    ext_net: ext-net
+    ext_subnet: ext-subnet
+    ext_cidr: 172.16.150.0/24
+    ext_gateway: 172.16.150.254
+    ext_pool_start: 172.16.150.151
+    ext_pool_end: 172.16.150.154
+    int_net: test-net
+    int_subnet: test-subnet
+    int_cidr: 192.168.100.0/24
+    router: test-router
+    secgroup: test-sg
+    keypair: test-key
+    flavor: m1.tiny
+    vms: [test-vm1, test-vm2]
+    vm_user: cirros
+    ssh_opts: "-i /root/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes -o LogLevel=ERROR"
+    cleanup: false
+
+  tasks:
+    # 1. イメージ
+    - name: Register cirros image
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        glance image-list | grep -qw {{ image_name }} && echo EXISTS && exit 0
+        curl -sf -o /tmp/cirros.img {{ image_url }}
+        glance image-create --name {{ image_name }} --disk-format qcow2 --container-format bare \
+          --visibility public --file /tmp/cirros.img
+        rm -f /tmp/cirros.img
+      register: image_result
+      changed_when: "'EXISTS' not in image_result.stdout"
+      when: not cleanup | bool
+
+    # 2. ネットワーク（外部: eth1 → br-ex → extnet1、内部: test-net）
+    - name: Create external network and subnet
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        neutron net-show {{ ext_net }} >/dev/null 2>&1 && echo EXISTS && exit 0
+        neutron net-create {{ ext_net }} --router:external \
+          --provider:network_type flat --provider:physical_network extnet1
+        neutron subnet-create {{ ext_net }} {{ ext_cidr }} --name {{ ext_subnet }} \
+          --gateway {{ ext_gateway }} --disable-dhcp \
+          --allocation-pool start={{ ext_pool_start }},end={{ ext_pool_end }}
+      register: ext_net_result
+      changed_when: "'EXISTS' not in ext_net_result.stdout"
+      when: not cleanup | bool
+
+    - name: Create internal network, subnet and router
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        neutron router-show {{ router }} >/dev/null 2>&1 && echo EXISTS && exit 0
+        neutron net-create {{ int_net }}
+        neutron subnet-create {{ int_net }} {{ int_cidr }} --name {{ int_subnet }}
+        neutron router-create {{ router }}
+        neutron router-gateway-set {{ router }} {{ ext_net }}
+        neutron router-interface-add {{ router }} {{ int_subnet }}
+      register: int_net_result
+      changed_when: "'EXISTS' not in int_net_result.stdout"
+      when: not cleanup | bool
+
+    - name: Create security group allowing ICMP and SSH
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        neutron security-group-show {{ secgroup }} >/dev/null 2>&1 && echo EXISTS && exit 0
+        neutron security-group-create {{ secgroup }}
+        neutron security-group-rule-create --direction ingress --protocol icmp {{ secgroup }}
+        neutron security-group-rule-create --direction ingress --protocol tcp \
+          --port-range-min 22 --port-range-max 22 {{ secgroup }}
+      register: sg_result
+      changed_when: "'EXISTS' not in sg_result.stdout"
+      when: not cleanup | bool
+
+    - name: Create keypair from root's SSH key
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova keypair-show {{ keypair }} >/dev/null 2>&1 && echo EXISTS && exit 0
+        nova keypair-add --pub-key /root/.ssh/id_rsa.pub {{ keypair }}
+      register: key_result
+      changed_when: "'EXISTS' not in key_result.stdout"
+      when: not cleanup | bool
+
+    # 3. VM 2 台を起動し、起動ログを確認
+    - name: Boot test VMs
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova show {{ item }} >/dev/null 2>&1 && echo EXISTS && exit 0
+        nova boot --image {{ image_name }} --flavor {{ flavor }} --nic net-name={{ int_net }} \
+          --security-groups {{ secgroup }} --key-name {{ keypair }} --poll {{ item }}
+      loop: "{{ vms }}"
+      register: vm_result
+      changed_when: "'EXISTS' not in vm_result.stdout"
+      when: not cleanup | bool
+
+    - name: Verify VMs are ACTIVE
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova show {{ item }} | awk '$2 == "status" {print $4}'
+      loop: "{{ vms }}"
+      register: vm_status
+      changed_when: false
+      failed_when: vm_status.stdout.strip() != 'ACTIVE'
+      when: not cleanup | bool
+
+    - name: Wait for login prompt in console log
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova console-log {{ item }} | grep -q 'login:'
+      loop: "{{ vms }}"
+      register: login_check
+      until: login_check.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Verify DHCP lease in console log
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova console-log {{ item }} | grep -E 'Lease of [0-9.]+ obtained'
+      loop: "{{ vms }}"
+      register: dhcp_check
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Get internal IPs of VMs
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova show {{ item }} | grep '{{ int_net }} network' | grep -oE '[0-9]+(\.[0-9]+){3}' | head -1
+      loop: "{{ vms }}"
+      register: vm_ips
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Set internal IP facts
+      ansible.builtin.set_fact:
+        vm1_ip: "{{ vm_ips.results[0].stdout.strip() }}"
+        vm2_ip: "{{ vm_ips.results[1].stdout.strip() }}"
+      when: not cleanup | bool
+
+    # 仮想ネットワーク内の通信: DHCP の名前空間から vm1 に ssh し、vm1 から vm2 へ ping（逆も）
+    - name: Get DHCP namespace of internal network
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        echo qdhcp-$(neutron net-show {{ int_net }} -f value -c id)
+      register: dhcp_ns
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Verify SSH to vm1 and ping vm2 from vm1 (internal network)
+      ansible.builtin.shell: |
+        ip netns exec {{ dhcp_ns.stdout.strip() }} \
+          timeout 60 ssh {{ ssh_opts }} {{ vm_user }}@{{ vm1_ip }} ping -c 3 {{ vm2_ip }}
+      register: internal_ping
+      until: internal_ping.rc == 0
+      retries: 6
+      delay: 10
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Verify SSH to vm2 and ping vm1 from vm2 (internal network)
+      ansible.builtin.shell: |
+        ip netns exec {{ dhcp_ns.stdout.strip() }} \
+          timeout 60 ssh {{ ssh_opts }} {{ vm_user }}@{{ vm2_ip }} ping -c 3 {{ vm1_ip }}
+      register: internal_ping_rev
+      until: internal_ping_rev.rc == 0
+      retries: 6
+      delay: 10
+      changed_when: false
+      when: not cleanup | bool
+
+    # MTU: 内部ネットワークの MTU いっぱいのパケット（DF 付き）が各 VM に届くこと
+    - name: Get MTU of internal network
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        neutron net-show {{ int_net }} -f value -c mtu
+      register: int_mtu
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Verify full-size packets reach VMs without fragmentation
+      ansible.builtin.shell: |
+        ip netns exec {{ dhcp_ns.stdout.strip() }} \
+          ping -c 3 -M do -s {{ int_mtu.stdout | int - 28 }} {{ item }}
+      loop: "{{ [vm1_ip, vm2_ip] }}"
+      register: mtu_ping
+      changed_when: false
+      when: not cleanup | bool
+
+    # 4. Floating IP を付け、入れ子の cc から ping と ssh
+    - name: Assign floating IPs to VMs
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        VM_ID=$(nova show {{ item }} | awk '$2 == "id" {print $4}')
+        PORT_ID=$(neutron port-list --device_id $VM_ID -f value -c id)
+        FIP=$(neutron floatingip-list --port_id $PORT_ID -f value -c floating_ip_address)
+        if [ -n "$FIP" ]; then echo "EXISTS $FIP"; exit 0; fi
+        FIP_ID=$(neutron floatingip-create {{ ext_net }} -f value -c id)
+        neutron floatingip-associate $FIP_ID $PORT_ID >/dev/null
+        neutron floatingip-show $FIP_ID -f value -c floating_ip_address
+      loop: "{{ vms }}"
+      register: fip_result
+      changed_when: "'EXISTS' not in fip_result.stdout"
+      when: not cleanup | bool
+
+    - name: Set floating IP facts
+      ansible.builtin.set_fact:
+        fips: "{{ fip_result.results | map(attribute='stdout') | map('regex_search', '[0-9.]+$') | list }}"
+      when: not cleanup | bool
+
+    - name: Ping floating IPs from nested cc
+      ansible.builtin.shell: ping -c 3 {{ item }}
+      loop: "{{ fips }}"
+      register: fip_ping
+      until: fip_ping.rc == 0
+      retries: 6
+      delay: 10
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: SSH to floating IPs from nested cc
+      ansible.builtin.shell: timeout 60 ssh {{ ssh_opts }} {{ vm_user }}@{{ item }} hostname
+      loop: "{{ fips }}"
+      register: fip_ssh
+      until: fip_ssh.rc == 0
+      retries: 6
+      delay: 10
+      changed_when: false
+      when: not cleanup | bool
+
+    - name: Display test results
+      ansible.builtin.debug:
+        msg:
+          - "VMs: {{ vms | zip(vm_ips.results | map(attribute='stdout')) | list }}"
+          - "DHCP lease: {{ dhcp_check.results | map(attribute='stdout') | list }}"
+          - "vm1 -> vm2 ping: {{ internal_ping.stdout_lines[-2:] }}"
+          - "vm2 -> vm1 ping: {{ internal_ping_rev.stdout_lines[-2:] }}"
+          - "internal network MTU: {{ int_mtu.stdout }}, full-size ping rc: {{ mtu_ping.results | map(attribute='rc') | list }}"
+          - "Floating IPs: {{ vms | zip(fips) | list }}"
+          - "FIP ping: {{ fip_ping.results | map(attribute='stdout_lines') | map('last') | list }}"
+          - "FIP ssh hostname: {{ fip_ssh.results | map(attribute='stdout') | list }}"
+      when: not cleanup | bool
+
+    # 後片付け（-e cleanup=true のときだけ）
+    - name: Delete test resources
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        for vm in {{ vms | join(' ') }}; do
+          nova show $vm >/dev/null 2>&1 && nova delete $vm
+        done
+        for i in $(seq 30); do
+          nova list | grep -qE ' ({{ vms | join('|') }}) ' || break
+          sleep 5
+        done
+        for fip_id in $(neutron floatingip-list -f value -c id); do
+          neutron floatingip-delete $fip_id
+        done
+        if neutron router-show {{ router }} >/dev/null 2>&1; then
+          neutron router-interface-delete {{ router }} {{ int_subnet }}
+          neutron router-gateway-clear {{ router }}
+          neutron router-delete {{ router }}
+        fi
+        neutron net-show {{ int_net }} >/dev/null 2>&1 && neutron net-delete {{ int_net }}
+        neutron net-show {{ ext_net }} >/dev/null 2>&1 && neutron net-delete {{ ext_net }}
+        neutron security-group-show {{ secgroup }} >/dev/null 2>&1 && neutron security-group-delete {{ secgroup }}
+        nova keypair-show {{ keypair }} >/dev/null 2>&1 && nova keypair-delete {{ keypair }}
+        IMAGE_ID=$(glance image-list | awk '$4 == "{{ image_name }}" {print $2}')
+        [ -n "$IMAGE_ID" ] && glance image-delete $IMAGE_ID
+        echo DONE
+      when: cleanup | bool

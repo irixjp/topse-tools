@@ -1,0 +1,279 @@
+- name: waiting for connection
+  hosts: all
+  gather_facts: false
+  tasks:
+    - ansible.builtin.wait_for_connection:
+        delay: 10
+        sleep: 5
+        timeout: 300
+
+- name: prepare cc server niic
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  tasks:
+    - name: NIC settings for eth1
+      ansible.builtin.copy:
+        dest: /etc/sysconfig/network-scripts/ifcfg-eth1
+        content: |
+          DEVICE="eth1"
+          BOOTPROT="none"
+          ONBOOT="yes"
+          TYPE="OVSPort"
+          DEVICETYPE="ovs"
+          OVS_BRIDGE="br-ex"
+        owner: root
+        group: root
+        mode: '0644'
+      register: nic_eth1
+
+    - name: NIC settings for br-ex
+      ansible.builtin.copy:
+        dest: /etc/sysconfig/network-scripts/ifcfg-br-ex
+        content: |
+          DEVICE="br-ex"
+          BOOTPROT="none"
+          ONBOOT="yes"
+          TYPE="OVSBridge"
+          DEVICETYPE="ovs"
+          OVSBOOTPROTO="none"
+          OVSDHCPINTERFACES="eth1"
+        owner: root
+        group: root
+        mode: '0644'
+      register: nic_br_ex
+
+    - name: Reboot after NIC configure
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: nic_eth1.changed or nic_br_ex.changed
+
+- name: prepare packstack answer file
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  max_fail_percentage: 0
+  vars:
+    password: password
+    cc_host: 192.168.199.150
+    nw_host: 192.168.199.150
+    com_hosts: 192.168.199.150
+    cinder_size: 20G
+    swift_size: 5G
+    tunn_nic: eth0
+
+  tasks:
+    - name: create answer file
+      shell: |
+        packstack --dry-run --allinone --default-password='{{ password }}' --provision-demo=n --gen-answer-file=/root/answer.txt
+
+    - name: edit answer file
+      shell: |
+        crudini --set /root/answer.txt general CONFIG_NAGIOS_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_CEILOMETER_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_SWIFT_INSTALL y
+        crudini --set /root/answer.txt general CONFIG_HEAT_INSTALL n
+        # 演習で使わないため外す（TASK-013。packstack の collectstatic・compress と再起動後の httpd の起動を軽くする）
+        crudini --set /root/answer.txt general CONFIG_HORIZON_INSTALL n
+
+        crudini --set /root/answer.txt general CONFIG_CONTROLLER_HOST {{ cc_host }}
+        crudini --set /root/answer.txt general CONFIG_NETWORK_HOSTS   {{ nw_host }}
+        crudini --set /root/answer.txt general CONFIG_COMPUTE_HOSTS   {{ com_hosts }}
+
+        crudini --set /root/answer.txt general CONFIG_KEYSTONE_REGION RegionOne
+        crudini --set /root/answer.txt general CONFIG_CINDER_VOLUMES_SIZE {{ cinder_size }}
+        crudini --set /root/answer.txt general CONFIG_SWIFT_STORAGE_SIZE {{ swift_size }}
+
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TYPE_DRIVERS vxlan,flat
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_ML2_TENANT_NETWORK_TYPES vxlan
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_L3_EXT_BRIDGE br-ex
+        crudini --set /root/answer.txt general CONFIG_LBAAS_INSTALL n
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_BRIDGE_MAPPINGS extnet1:br-ex
+        crudini --set /root/answer.txt general CONFIG_NEUTRON_OVS_TUNNEL_IF {{ tunn_nic }}
+      args:
+        removes: /root/answer.txt
+
+- name: temporary disable selinux before run packstack
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: setenforce 0
+      shell: setenforce 0; exit 0
+      ignore_errors: True
+
+# oslo.service 1.16 の周期タスクのタイマーは、停止の指示で次の周期までの sleep を中断しないため、
+# cinder・neutron 等の停止が最大 60 秒（graceful_shutdown_timeout の既定値）かかり、再起動と
+# cinder-volume の再起動が遅くなる。待っているのは処理ではなく sleep なので、10 秒で打ち切る（TASK-013）
+# 設定はサービスの起動時に読まれるため、packstack がサービスを起動する前に入れる
+# （conf はイメージに入っているパッケージで作られている。packstack の puppet はこの項目を管理しない）
+- name: shorten graceful shutdown of OpenStack services
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Set graceful_shutdown_timeout
+      shell: |
+        # 全ホストが同じイメージ（centos7-openstack）で、3 つとも入っている。ない場合は前提が崩れているので失敗させる
+        for f in /etc/nova/nova.conf /etc/cinder/cinder.conf /etc/neutron/neutron.conf; do
+          [ -f $f ] || { echo "$f not found"; exit 1; }
+          openstack-config --set $f DEFAULT graceful_shutdown_timeout 10
+        done
+
+- name: exec packstack
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  tasks:
+    - name: exec packstack
+      shell: |
+        packstack --answer-file=/root/answer.txt
+
+- name: configure cc after packstack
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  vars:
+    cc_host: 192.168.199.150
+  tasks:
+    - name: edit nova.conf
+      shell: |
+        openstack-config --set /etc/nova/nova.conf DEFAULT api_rate_limit false
+        openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_host 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf DEFAULT novncproxy_port 6080
+        openstack-config --set /etc/nova/nova.conf vnc enabled true
+        openstack-config --set /etc/nova/nova.conf vnc novncproxy_base_url http://{{ cc_host }}:6080/vnc_auto.html
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_listen 0.0.0.0
+        openstack-config --set /etc/nova/nova.conf vnc vncserver_proxyclient_address {{ cc_host }}
+        openstack-config --set /etc/nova/nova.conf vnc vnc_keymap ja
+        openstack-config --set /etc/nova/nova.conf libvirt virt_type kvm
+        openstack-config --set /etc/nova/nova.conf libvirt cpu_mode host-passthrough
+        openstack-config --set /etc/nova/nova.conf DEFAULT cpu_allocation_ratio 32
+        openstack-config --set /etc/nova/nova.conf DEFAULT ram_allocation_ratio 1.5
+        openstack-config --set /etc/nova/nova.conf DEFAULT disk_allocation_ratio 3
+        openstack-config --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host true
+      args:
+        removes: /etc/nova/nova.conf
+
+    - name: edit cinder.conf
+      shell: |
+        openstack-config --set /etc/cinder/cinder.conf lvm volume_clear none
+      args:
+        removes: /etc/cinder/cinder.conf
+
+    - name: edit neutron plugin.ini
+      shell: |
+        openstack-config --set /etc/neutron/plugin.ini ml2_type_vxlan vni_ranges 10:1000
+      args:
+        removes: /etc/neutron/plugin.ini
+
+    # 入れ子のノードの eth0 は母艦のネットワーク（MTU 1442）につながる。neutron に下のネットワークの MTU を
+    # 教え、VXLAN のテナントネットワークの MTU（1442 - 50 = 1392）を計算させて DHCP で VM に配らせる。
+    # 既定の 1500 のままだと 1450 を配り、compute をまたぐ大きいパケット（SSH の鍵交換など）が落ちる。
+    - name: edit neutron.conf (MTU of the underlying network)
+      shell: |
+        openstack-config --set /etc/neutron/neutron.conf DEFAULT global_physnet_mtu $(cat /sys/class/net/eth0/mtu)
+      args:
+        removes: /etc/neutron/neutron.conf
+
+- name: allow login to nova user
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: usermod
+      shell: usermod -s /bin/bash nova
+
+    - name: copy ssh_config
+      shell: |
+        cat << EOF >> /var/lib/nova/.ssh/config
+        Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+        EOF
+        chmod 0644 /var/lib/nova/.ssh/config
+        chown nova:nova /var/lib/nova/.ssh/config
+
+- name: reboot all hosts
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Reboot after packstack
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+
+    - name: test connection (after reboot)
+      ping:
+
+# 再起動時に loop デバイスの接続と lvmetad の pvscan の順序が合わないと、cinder-volumes の VG が見えず、
+# cinder-volume がドライバーの初期化に失敗して down のままになる（TASK-008 の負荷テストで 33 名中 1 名）
+# PV を lvmetad に登録し直し、VG が見えてから cinder-volume を再起動する
+- name: rescan LVM for cinder-volumes after reboot
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Wait until the cinder-volumes VG is visible (pvscan --cache)
+      ansible.builtin.shell: |
+        pvscan --cache
+        vgs cinder-volumes
+      register: vg_status
+      until: vg_status.rc == 0
+      retries: 12
+      delay: 5
+      changed_when: false
+
+    - name: Restart cinder-volume
+      ansible.builtin.systemd:
+        name: openstack-cinder-volume
+        state: restarted
+
+# 入れ子の OpenStack（Newton）は nova / neutron / cinder コマンドで操作する（母艦の openstack コマンドと区別するため）
+- name: Wait until services available
+  hosts: openstack_cc
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Wait until all network agents are alive
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        neutron agent-list -f value -c alive
+      register: agent_status
+      until:
+        - agent_status.stdout_lines | length > 0
+        - agent_status.stdout_lines | reject('match', '^(:-\)|True)$') | list | length == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Wait until all compute services are enabled and up
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        nova service-list | grep -E '^\| [0-9]+ '
+      register: compute_status
+      until:
+        - compute_status.stdout_lines | length > 0
+        - compute_status.stdout_lines | reject('search', '\| enabled +\| up +\|') | list | length == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Wait until all volume services are enabled and up
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        cinder service-list | grep -E '^\| cinder-'
+      register: volume_status
+      until:
+        - volume_status.stdout_lines | length > 0
+        - volume_status.stdout_lines | reject('search', '\| enabled +\| up +\|') | list | length == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Display service status
+      ansible.builtin.debug:
+        msg:
+          - "network agents alive: {{ agent_status.stdout_lines }}"
+          - "compute services: {{ compute_status.stdout_lines }}"
+          - "volume services: {{ volume_status.stdout_lines }}"

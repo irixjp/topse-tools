@@ -1,13 +1,8 @@
-heat_template_version: 2015-04-30
+heat_template_version: 2021-04-16
 
-description: Setup default handson environment.
+description: Setup console and default handson environment.
 
 parameters:
-  reposerver:
-    type: string
-    label: hands-on repository server
-    description: Teahcer will give the specific ip address.
-
   password:
     type: string
     label: Server password
@@ -22,6 +17,10 @@ resources:
         - protocol: icmp
           remote_ip_prefix: 0.0.0.0/0
         - protocol: tcp
+          port_range_min: 1
+          port_range_max: 65535
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: udp
           port_range_min: 1
           port_range_max: 65535
           remote_ip_prefix: 0.0.0.0/0
@@ -66,12 +65,6 @@ resources:
       count: 1
       timeout: 600
 
-  key_pair:
-    type: OS::Nova::KeyPair
-    properties:
-      name: key-for-console
-      save_private_key: true
-
   neutron-port:
     type: OS::Neutron::Port
     properties:
@@ -102,70 +95,40 @@ resources:
         ssh_pwauth: True
         timezone: Asia/Tokyo
 
-  config_set_reposerver:
+  config_console_config:
     type: OS::Heat::SoftwareConfig
     properties:
-      config:
-        str_replace:
-          params:
-            __heat_reposerver_ip: { get_param: reposerver }
-          template: |
-            #!/bin/bash -ex
-            echo "__heat_reposerver_ip reposerver" >> /etc/hosts
-            rm -f /etc/yum.repos.d/CentOS*
-            rm -f /etc/yum.repos.d/epel*
-            curl -o /etc/yum.repos.d/edubase.repo http://reposerver/repo/edubase.repo
-            yum clean all
-            yum repolist
+      config: |
+        #!/bin/bash -ex
+        export CLOUT_INIT_USER=rocky
+        export REPO_CENT7=reposerver-centos7
 
-  config_init_config:
+        cat << EOF > /home/${CLOUT_INIT_USER}/openrc
+        export OS_AUTH_URL=http://XX.XX.XX.XX:5000/v3
+        export OS_PROJECT_NAME=tenant-YYYYY
+        export OS_USERNAME=student-YYYYY
+        export OS_PASSWORD=pass-YYYYY
+        export OS_REGION_NAME=RegionOne
+        export OS_USER_DOMAIN_NAME=Default
+        export OS_IDENTITY_API_VERSION=3
+        EOF
+
+        wget ${REPO_CENT7}/hands-on/support.sh -O /home/${CLOUT_INIT_USER}/support.sh
+        chown ${CLOUT_INIT_USER}:${CLOUT_INIT_USER} /home/${CLOUT_INIT_USER}/openrc
+        chown ${CLOUT_INIT_USER}:${CLOUT_INIT_USER} /home/${CLOUT_INIT_USER}/support.sh
+        echo "source ~/openrc"     >> /home/${CLOUT_INIT_USER}/.bashrc
+        echo "source ~/support.sh" >> /home/${CLOUT_INIT_USER}/.bashrc
+        echo "export LC_ALL=en_US.UTF-8" >> /home/${CLOUT_INIT_USER}/.bashrc
+        echo "export LANG=en_US.UTF-8"   >> /home/${CLOUT_INIT_USER}/.bashrc
+
+  config_prompt_console:
     type: OS::Heat::SoftwareConfig
     properties:
-      config:
-        str_replace:
-          params:
-            $_private_key_: { get_attr: [ key_pair, private_key ] }
-            $_public_key_: { get_attr: [ key_pair, public_key ] }
-          template: |
-            #!/bin/bash -ex
-            yum install -y \
-            python2-novaclient \
-            python2-cinderclient \
-            python2-keystoneclient \
-            python2-neutronclient \
-            python2-glanceclient \
-            python2-swiftclient \
-            python2-heatclient \
-            python-openstackclient \
-            jq \
-            wget \
-            vim \
-            crudini \
-            bash-completion \
-            ansible \
-            lynx \
-            plotnetcfg \
-            graphviz \
-            httpd \
-            git
-
-            systemctl enable httpd
-            systemctl start httpd
-
-            wget reposerver/hands-on/openrc -O /home/centos/openrc
-            chown centos:centos /home/centos/openrc
-
-            wget reposerver/hands-on/support.sh -O /home/centos/support.sh
-            chown centos:centos /home/centos/support.sh
-
-            echo "$_private_key_" > /home/centos/.ssh/id_rsa
-            echo "$_public_key_" > /home/centos/.ssh/id_rsa.pub
-            chown centos:centos /home/centos/.ssh/id_rsa
-            chown centos:centos /home/centos/.ssh/id_rsa.pub
-            chmod 600 /home/centos/.ssh/id_rsa
-            chmod 644 /home/centos/.ssh/id_rsa.pub
-            echo "source ~/openrc" >> /home/centos/.bashrc
-            echo "source ~/support.sh" >> /home/centos/.bashrc
+      config: |
+        #!/bin/bash -ex
+        cat << EOF > /etc/profile.d/prompt.sh
+        export PS1='\[\e[1;30;43m\][CONSOLE]\[\e[0m\] \u@\h \W\$ '
+        EOF
 
   config_send_notify_after_settings:
     type: OS::Heat::SoftwareConfig
@@ -183,23 +146,20 @@ resources:
     properties:
       parts:
       - config: { get_resource: config_set_passwd }
-      - config: { get_resource: config_set_reposerver }
-      - config: { get_resource: config_init_config }
+      - config: { get_resource: config_prompt_console }
+      - config: { get_resource: config_console_config }
       - config: { get_resource: config_send_notify_after_settings }
 
   instance:
     type: OS::Nova::Server
     properties:
       name: console
-      image: CentOS7
-      flavor: m1.tiny
-      key_name: { get_resource: key_pair }
+      image: rocky9-console
+      flavor: m1.small
       networks:
         - port: { get_resource: neutron-port }
       user_data_format: RAW
       user_data: { get_resource: server_init }
-      metadata:
-        reposerver: { get_param: reposerver }
 
 outputs:
   console:
@@ -209,5 +169,3 @@ outputs:
       ip_address: { get_attr: [ neutron-port, fixed_ips, 0, ip_address ] }
       floating_ip: { get_attr: [floating_ip, floating_ip_address] }
       password: { get_param: password }
-      private_key: { get_attr: [ key_pair, private_key ] }
-      reposerver: { get_param: reposerver }

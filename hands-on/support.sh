@@ -1,3 +1,5 @@
+export PS1='\[\e[1;30;43m\][CONSOLE]\[\e[0m\] \u@\h \W\$ '
+
 function get_uuid (){ cat - | grep " id " | awk "{print S4}";}
 
 function get_reposerver () {

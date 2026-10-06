@@ -1,0 +1,257 @@
+heat_template_version: 2015-04-30
+
+description: 10th Hands-on Environment
+
+parameters:
+  password:
+    type: string
+    label: Server password
+    description: You set your password on your instances.
+    default: password
+
+resources:
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: wait_handle }
+      count: 3
+      timeout: 600
+
+  security_group_open_all:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: handson10-open-all
+      description: Allow all ICMP, TCP, UDP ingress
+      rules:
+        - protocol: icmp
+          direction: ingress
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: tcp
+          direction: ingress
+          remote_ip_prefix: 0.0.0.0/0
+        - protocol: udp
+          direction: ingress
+          remote_ip_prefix: 0.0.0.0/0
+
+  handson_network:
+    type: OS::Neutron::Net
+    properties:
+      name: handson10-net
+
+  handson_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: handson10-subnet
+      ip_version: 4
+      network_id: { get_resource: handson_network }
+      cidr: 172.16.100.0/24
+      gateway_ip: 172.16.100.254
+      enable_dhcp: False
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: Ext-Router
+      subnet: { get_resource: handson_subnet }
+
+  neutron_port_cc_eth0:
+    type: OS::Neutron::Port
+    properties:
+      name: handson10-cc-eth0
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.200
+      security_groups:
+        - { get_resource: security_group_open_all }
+
+  neutron_port_cc_eth1:
+    type: OS::Neutron::Port
+    properties:
+      name: handson10-cc-eth1
+      network: { get_resource: handson_network }
+      fixed_ips:
+        - ip_address: 172.16.100.200
+        - ip_address: 172.16.100.201
+        - ip_address: 172.16.100.202
+        - ip_address: 172.16.100.203
+        - ip_address: 172.16.100.204
+      port_security_enabled: false
+
+  neutron_port_node1_eth0:
+    type: OS::Neutron::Port
+    properties:
+      name: handson10-node1-eth0
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.201
+      security_groups:
+        - { get_resource: security_group_open_all }
+
+  neutron_port_node2_eth0:
+    type: OS::Neutron::Port
+    properties:
+      name: handson10-node2-eth0
+      network: work-net
+      fixed_ips:
+        - ip_address: 192.168.199.202
+      security_groups:
+        - { get_resource: security_group_open_all }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: public
+
+  floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: neutron_port_cc_eth0 }
+
+  config_set_passwd:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        password: { get_param: password }
+        chpasswd: { expire: False }
+        ssh_pwauth: True
+        timezone: Asia/Tokyo
+
+  config_send_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            __heat_wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+          template: |
+            #!/bin/bash -ex
+            __heat_wc_notify --data-binary '{"status": "SUCCESS"}'
+
+  config_prompt_cc:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        cat << EOF > /etc/profile.d/prompt.sh
+        export PS1='\[\e[1;36m\][OPST-CC]\[\e[0m\] \u@\h \W\$ '
+        EOF
+
+  config_prompt_node1:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        cat << EOF > /etc/profile.d/prompt.sh
+        export PS1='\[\e[1;36m\][OPST-NODE1]\[\e[0m\] \u@\h \W\$ '
+        EOF
+
+  config_prompt_node2:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        cat << EOF > /etc/profile.d/prompt.sh
+        export PS1='\[\e[1;36m\][OPST-NODE2]\[\e[0m\] \u@\h \W\$ '
+        EOF
+
+  config_etc_hosts:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: |
+        #!/bin/bash -ex
+        cat << EOF >> /etc/hosts
+        192.168.199.200 handson10-openstack-cc.novalocal handson10-openstack-cc
+        192.168.199.201 handson10-openstack-node1.novalocal handson10-openstack-node1
+        192.168.199.202 handson10-openstack-node2.novalocal handson10-openstack-node2
+        EOF
+
+  server_init_openstack_cc:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_etc_hosts }
+      - config: { get_resource: config_prompt_cc }
+      - config: { get_resource: config_send_notify }
+
+  server_init_openstack_compute1:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_etc_hosts }
+      - config: { get_resource: config_prompt_node1 }
+      - config: { get_resource: config_send_notify }
+
+  server_init_openstack_compute2:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: config_set_passwd }
+      - config: { get_resource: config_etc_hosts }
+      - config: { get_resource: config_prompt_node2 }
+      - config: { get_resource: config_send_notify }
+
+  instance_openstack_cc:
+    type: OS::Nova::Server
+    properties:
+      name: handson10-openstack-cc
+      image: centos7-openstack
+      flavor: m1.large
+      networks:
+        - port: { get_resource: neutron_port_cc_eth0 }
+        - port: { get_resource: neutron_port_cc_eth1 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_openstack_cc }
+
+  instance_openstack_node1:
+    type: OS::Nova::Server
+    properties:
+      name: handson10-openstack-node1
+      image: centos7-openstack
+      flavor: m1.large
+      networks:
+        - port: { get_resource: neutron_port_node1_eth0 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_openstack_compute1 }
+
+  instance_openstack_node2:
+    type: OS::Nova::Server
+    properties:
+      name: handson10-openstack-node2
+      image: centos7-openstack
+      flavor: m1.large
+      networks:
+        - port: { get_resource: neutron_port_node2_eth0 }
+      user_data_format: RAW
+      user_data: { get_resource: server_init_openstack_compute2 }
+
+outputs:
+  instance1:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack_cc, name ] }
+      ip_address: { get_attr: [ neutron_port_cc_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: { get_attr: [floating_ip, floating_ip_address] }
+
+  instance2:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack_node1, name ] }
+      ip_address: { get_attr: [ neutron_port_node1_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: ""
+
+  instance3:
+    description: server information
+    value:
+      name: { get_attr: [ instance_openstack_node2, name ] }
+      ip_address: { get_attr: [ neutron_port_node2_eth0, fixed_ips, 0, ip_address ] }
+      floating_ip: ""
+
+  password:
+    description: server password for user "centos"
+    value: { get_param: password }
