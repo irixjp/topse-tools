@@ -1,0 +1,83 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: "Prepare 1: Rocky 9 image registration"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Download Rocky 9 GenericCloud image
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        curl -o /tmp/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2 \
+          http://{{ repo_server_ip }}:{{ repo_server_port }}/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2
+      args:
+        creates: /tmp/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2
+
+    - name: Register rocky9-orig image in Glance
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-orig >/dev/null 2>&1 && echo EXISTS || \
+        openstack image create \
+          --disk-format qcow2 \
+          --container-format bare \
+          --public \
+          --protected \
+          --file /tmp/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2 \
+          rocky9-orig
+      register: image_create_result
+      changed_when: "'EXISTS' not in image_create_result.stdout"
+
+    - name: Check image status is active
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-orig -f value -c status
+      register: image_status
+      changed_when: false
+      failed_when: image_status.stdout.strip() != 'active'
+
+    - name: Display image status
+      ansible.builtin.debug:
+        msg: "Image status: {{ image_status.stdout.strip() }}"
+
+    - name: Check disk_format is qcow2
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-orig -f value -c disk_format
+      register: image_disk_format
+      changed_when: false
+      failed_when: image_disk_format.stdout.strip() != 'qcow2'
+
+    - name: Display disk format
+      ansible.builtin.debug:
+        msg: "Disk format: {{ image_disk_format.stdout.strip() }}"
+
+    - name: Check visibility is public
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-orig -f value -c visibility
+      register: image_visibility
+      changed_when: false
+      failed_when: image_visibility.stdout.strip() != 'public'
+
+    - name: Display visibility
+      ansible.builtin.debug:
+        msg: "Visibility: {{ image_visibility.stdout.strip() }}"
+
+    - name: Check size is greater than 0
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-orig -f value -c size
+      register: image_size
+      changed_when: false
+      failed_when: image_size.stdout.strip() | int <= 0
+
+    - name: Display image size
+      ansible.builtin.debug:
+        msg: "Image size: {{ image_size.stdout.strip() }} bytes"
+
+    - name: Check image appears in list
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image list -f value -c Name | grep -q rocky9-orig
+      changed_when: false

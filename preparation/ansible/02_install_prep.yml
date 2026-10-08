@@ -1,0 +1,197 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: Common setup on all OpenStack nodes
+  hosts: openstack
+  tasks:
+    # DNS は cloud-init の設定（DNS1 / DNS2）をそのまま使う。eno16905（NII 管理ネットワーク）の接続には触れない
+    - name: Add OpenStack node hostnames to /etc/hosts
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} OPENSTACK NODES"
+        block: "{{ etc_hosts_entries }}"
+
+    - name: Remove existing repo files
+      ansible.builtin.shell: rm -f /etc/yum.repos.d/*.repo
+      changed_when: true
+
+    - name: Install local repo configuration
+      ansible.builtin.template:
+        src: local.repo.j2
+        dest: /etc/yum.repos.d/local.repo
+        mode: "0644"
+
+    # 04 で有効にする legacy network サービス（network-scripts）が NetworkManager を検出するのに必要。
+    # ないと network サービスが eno16905 にも dhclient を起動する（TASK-003 の V6）
+    - name: Install dbus-tools
+      ansible.builtin.dnf:
+        name: dbus-tools
+        state: present
+
+    - name: Enable nested KVM
+      ansible.builtin.shell: |
+        if grep -q vmx /proc/cpuinfo; then
+          MOD=kvm_intel
+        elif grep -q svm /proc/cpuinfo; then
+          MOD=kvm_amd
+        else
+          echo "No hardware virtualization support"; exit 0
+        fi
+        modprobe $MOD nested=1
+        echo "options $MOD nested=1" > /etc/modprobe.d/kvm-nested.conf
+      changed_when: true
+
+    - name: Verify /dev/kvm exists
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: kvm_dev
+      failed_when: not kvm_dev.stat.exists
+
+    - name: Set SELinux to permissive
+      ansible.posix.selinux:
+        policy: targeted
+        state: permissive
+
+    # Packstack の iptables ルールと衝突するため止める
+    - name: Stop and disable firewalld
+      ansible.builtin.systemd:
+        name: firewalld
+        state: stopped
+        enabled: false
+
+    - name: Update all packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    # ベアメタルは POST に数分かかるため、03 / 05 と同じく長めに待つ
+    - name: Reboot after dnf update
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+
+- name: Controller preparation
+  hosts: controller
+  vars:
+    loopback_bind_mounts:
+      - name: cinder
+        path: /var/lib/cinder
+      - name: swift-loopback
+        path: /srv/loopback-device
+  tasks:
+    # Packstack は Cinder / Swift のループバックファイルの置き場を固定している（/var/lib/cinder、/srv/loopback-device）。
+    # ルート FS（SSD）を使わないよう、Packstack の実行前に HDD 上のディレクトリを bind mount しておく
+    - name: Verify the HDD for loopback storage is mounted
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['mounts'] | selectattr('mount', 'equalto', loopback_storage_mount) | list | length > 0
+        fail_msg: "{{ loopback_storage_mount }} がマウントされていない"
+        quiet: true
+
+    - name: Create loopback storage directories on the HDD
+      ansible.builtin.file:
+        path: "{{ loopback_storage_dir }}/{{ item.name }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ loopback_bind_mounts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Create bind mount points
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ loopback_bind_mounts }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Bind mount loopback storage directories
+      ansible.posix.mount:
+        path: "{{ item.path }}"
+        src: "{{ loopback_storage_dir }}/{{ item.name }}"
+        fstype: none
+        opts: bind,x-systemd.requires-mounts-for={{ loopback_storage_mount }}
+        state: mounted
+      loop: "{{ loopback_bind_mounts }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Generate root SSH key
+      ansible.builtin.command: ssh-keygen -t rsa -N '' -f /root/.ssh/id_rsa
+      args:
+        creates: /root/.ssh/id_rsa
+
+    - name: Read root public key
+      ansible.builtin.slurp:
+        src: /root/.ssh/id_rsa.pub
+      register: root_pubkey
+
+    - name: Distribute root SSH key to all OpenStack nodes
+      ansible.builtin.authorized_key:
+        user: root
+        key: "{{ root_pubkey.content | b64decode }}"
+        state: present
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['openstack'] }}"
+
+    - name: Enable PermitRootLogin on all nodes
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin prohibit-password'
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['openstack'] }}"
+
+    - name: Reload sshd on all nodes
+      ansible.builtin.systemd:
+        name: sshd
+        state: reloaded
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['openstack'] }}"
+
+    - name: Verify root SSH to all nodes
+      ansible.builtin.command: ssh -o StrictHostKeyChecking=no root@{{ item }} echo OK
+      loop: "{{ all_openstack_ips }}"
+      changed_when: false
+
+    - name: Install Packstack
+      ansible.builtin.dnf:
+        name: openstack-packstack
+        state: present
+
+    - name: Generate answer file
+      ansible.builtin.command: packstack --gen-answer-file=/root/packstack-answers.conf
+      args:
+        creates: /root/packstack-answers.conf
+
+    # controller 系のホストは gen-answer-file の自動検出に頼らず、導出した controller_ip で明示する
+    - name: Configure answer file
+      ansible.builtin.lineinfile:
+        path: /root/packstack-answers.conf
+        regexp: '^{{ item.key }}='
+        line: '{{ item.key }}={{ item.value }}'
+      loop: "{{ packstack_answers | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      vars:
+        packstack_answers:
+          CONFIG_DEFAULT_PASSWORD: "{{ openstack_password }}"
+          CONFIG_CONTROLLER_HOST: "{{ controller_ip }}"
+          CONFIG_COMPUTE_HOSTS: "{{ compute_ips | join(',') }}"
+          CONFIG_NETWORK_HOSTS: "{{ controller_ip }}"
+          CONFIG_STORAGE_HOST: "{{ controller_ip }}"
+          CONFIG_AMQP_HOST: "{{ controller_ip }}"
+          CONFIG_MARIADB_HOST: "{{ controller_ip }}"
+          CONFIG_HEAT_INSTALL: "y"
+          CONFIG_CEILOMETER_INSTALL: "n"
+          CONFIG_AODH_INSTALL: "n"
+          CONFIG_PROVISION_DEMO: "n"
+          CONFIG_CINDER_VOLUMES_SIZE: "{{ cinder_volumes_size }}"
+          CONFIG_SWIFT_STORAGE_SIZE: "{{ swift_storage_size }}"
+
+    - name: Patch nova_300.py for ssh-keyscan comment bug
+      ansible.builtin.script:
+        cmd: patch_nova_300.sh
+      args:
+        creates: /root/.nova_300_patched

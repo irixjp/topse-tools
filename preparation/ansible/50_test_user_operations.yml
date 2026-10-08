@@ -1,0 +1,679 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+# Play 1: Admin setup - create project, user, role, openrc
+- name: "Test 4: User operations - Admin setup"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Create project tenant-0000
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack project show tenant-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack project create --domain default tenant-0000
+      register: project_result
+      changed_when: "'EXISTS' not in project_result.stdout"
+
+    - name: Create user student-0000
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack user show student-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack user create --domain default --project tenant-0000 --password pass-0000 student-0000
+      register: user_result
+      changed_when: "'EXISTS' not in user_result.stdout"
+
+    - name: Assign member role to student-0000
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack role assignment list --user student-0000 --project tenant-0000 --names -f value | grep -q member && echo EXISTS || \
+        openstack role add --project tenant-0000 --user student-0000 member
+      register: role_result
+      changed_when: "'EXISTS' not in role_result.stdout"
+
+    - name: Create openrc_0000
+      ansible.builtin.copy:
+        dest: /root/openrc_0000
+        mode: "0600"
+        content: |
+          export OS_AUTH_URL=http://{{ controller_ip }}:5000/v3
+          export OS_PROJECT_NAME=tenant-0000
+          export OS_USERNAME=student-0000
+          export OS_PASSWORD=pass-0000
+          export OS_USER_DOMAIN_NAME=Default
+          export OS_PROJECT_DOMAIN_NAME=Default
+          export OS_IDENTITY_API_VERSION=3
+
+    - name: Verify project and user
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        echo "Project: $(openstack project show tenant-0000 -f value -c id)"
+        echo "User: $(openstack user show student-0000 -f value -c id)"
+      register: admin_verify
+      changed_when: false
+
+    - name: Display admin setup results
+      ansible.builtin.debug:
+        msg: "{{ admin_verify.stdout_lines }}"
+
+# Play 2: Student operations test
+- name: "Test 4: User operations - Student tests"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Create network tenant-net-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack network show tenant-net-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack network create tenant-net-0000
+      register: net_result
+      changed_when: "'EXISTS' not in net_result.stdout"
+
+    - name: Create subnet tenant-subnet-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack subnet show tenant-subnet-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack subnet create --network tenant-net-0000 --subnet-range 10.10.0.0/24 tenant-subnet-0000
+      register: subnet_result
+      changed_when: "'EXISTS' not in subnet_result.stdout"
+
+    - name: Create router tenant-router-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack router show tenant-router-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack router create tenant-router-0000
+      register: router_result
+      changed_when: "'EXISTS' not in router_result.stdout"
+
+    - name: Set router external gateway
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack router set --external-gateway public tenant-router-0000
+      changed_when: true
+
+    - name: Add subnet to router
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack router add subnet tenant-router-0000 tenant-subnet-0000 2>/dev/null || true
+      changed_when: true
+
+    - name: Add ICMP security group rule
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack security group rule list default -f value -c "IP Protocol" | grep -q icmp && echo EXISTS || \
+        openstack security group rule create --protocol icmp --ingress default
+      register: icmp_result
+      changed_when: "'EXISTS' not in icmp_result.stdout"
+
+    - name: Add SSH security group rule
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack security group rule list default -f value -c "IP Protocol" -c "Port Range" | grep -q "tcp.*22:22" && echo EXISTS || \
+        openstack security group rule create --protocol tcp --dst-port 22 --ingress default
+      register: ssh_result
+      changed_when: "'EXISTS' not in ssh_result.stdout"
+
+    - name: Create VM test-vm-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show test-vm-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.tiny \
+          --image cirros \
+          --network tenant-net-0000 \
+          --wait \
+          test-vm-0000
+      register: vm_result
+      changed_when: "'EXISTS' not in vm_result.stdout"
+
+    - name: Verify VM is ACTIVE
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show test-vm-0000 -f value -c status
+      register: vm_status
+      changed_when: false
+      failed_when: vm_status.stdout.strip() != 'ACTIVE'
+
+    - name: Resize VM to m1.small
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        CURRENT_FLAVOR=$(openstack server show test-vm-0000 -f value -c flavor)
+        if echo "$CURRENT_FLAVOR" | grep -q "m1.small"; then
+          echo EXISTS
+        else
+          openstack server resize --flavor m1.small --wait test-vm-0000
+        fi
+      register: resize_result
+      changed_when: "'EXISTS' not in resize_result.stdout"
+
+    - name: Confirm resize
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        STATUS=$(openstack server show test-vm-0000 -f value -c status)
+        if [ "$STATUS" = "VERIFY_RESIZE" ]; then
+          openstack server resize confirm test-vm-0000
+        fi
+      changed_when: true
+
+    - name: Wait for VM to become ACTIVE after resize
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show test-vm-0000 -f value -c status
+      register: resize_status
+      until: resize_status.stdout.strip() == 'ACTIVE'
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Verify flavor after resize
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show test-vm-0000 -f value -c flavor
+      register: flavor_check
+      changed_when: false
+      failed_when: "'m1.small' not in flavor_check.stdout"
+
+    - name: Create volume test-vol-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack volume show test-vol-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack volume create --size 1 test-vol-0000
+      register: vol_result
+      changed_when: "'EXISTS' not in vol_result.stdout"
+
+    - name: Wait for volume to become available
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack volume show test-vol-0000 -f value -c status
+      register: vol_status
+      until: vol_status.stdout.strip() == 'available'
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Attach volume to VM
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        VOL_STATUS=$(openstack volume show test-vol-0000 -f value -c status)
+        if [ "$VOL_STATUS" = "in-use" ]; then
+          echo EXISTS
+        else
+          openstack server add volume test-vm-0000 test-vol-0000
+        fi
+      register: attach_result
+      changed_when: "'EXISTS' not in attach_result.stdout"
+
+    - name: Wait for volume to become in-use
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack volume show test-vol-0000 -f value -c status
+      register: vol_attach_status
+      until: vol_attach_status.stdout.strip() == 'in-use'
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Deploy Heat template
+      ansible.builtin.copy:
+        dest: /root/heat_test_0000.yaml
+        mode: "0644"
+        content: |
+          heat_template_version: 2021-04-16
+          description: Test stack for tenant-0000
+
+          resources:
+            heat_net:
+              type: OS::Neutron::Net
+              properties:
+                name: heat-net-0000
+
+            heat_subnet:
+              type: OS::Neutron::Subnet
+              properties:
+                name: heat-subnet-0000
+                network: { get_resource: heat_net }
+                cidr: 10.20.0.0/24
+
+            heat_server:
+              type: OS::Nova::Server
+              properties:
+                name: heat-vm-0000
+                flavor: m1.tiny
+                image: cirros
+                networks:
+                  - network: { get_resource: heat_net }
+
+    - name: Create Heat stack test-stack-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack stack show test-stack-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack stack create -t /root/heat_test_0000.yaml test-stack-0000
+      register: stack_result
+      changed_when: "'EXISTS' not in stack_result.stdout"
+
+    - name: Wait for stack CREATE_COMPLETE
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack stack show test-stack-0000 -f value -c stack_status
+      register: stack_status
+      until: stack_status.stdout.strip() == 'CREATE_COMPLETE'
+      retries: 30
+      delay: 10
+      changed_when: false
+      failed_when: "'FAILED' in stack_status.stdout"
+
+    - name: Display test results
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        echo "VM status: $(openstack server show test-vm-0000 -f value -c status)"
+        echo "VM flavor: $(openstack server show test-vm-0000 -f value -c flavor)"
+        echo "Volume status: $(openstack volume show test-vol-0000 -f value -c status)"
+        echo "Stack status: $(openstack stack show test-stack-0000 -f value -c stack_status)"
+      register: test_results
+      changed_when: false
+
+    - name: Show test results
+      ansible.builtin.debug:
+        msg: "{{ test_results.stdout_lines }}"
+
+    # --- CentOS 7 Host Key Regeneration Tests ---
+
+    - name: Create keypair student-key-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack keypair show student-key-0000 >/dev/null 2>&1 && echo EXISTS || \
+        openstack keypair create student-key-0000 > /root/student-key-0000.pem
+      register: student_keypair_result
+      changed_when: "'EXISTS' not in student_keypair_result.stdout"
+
+    - name: Set keypair file permissions
+      ansible.builtin.file:
+        path: /root/student-key-0000.pem
+        mode: "0600"
+
+    # -- centos7-openstack: Boot 1 --
+
+    - name: Boot centos7-os-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-openstack \
+          --network tenant-net-0000 \
+          --key-name student-key-0000 \
+          --wait \
+          centos7-os-0000
+      changed_when: true
+
+    - name: Create floating IP for centos7-os-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip create public -f value -c floating_ip_address
+      register: centos7_os_fip1
+      changed_when: true
+
+    - name: Assign floating IP to centos7-os-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server add floating ip centos7-os-0000 {{ centos7_os_fip1.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for centos7-os-0000 to boot (boot 1)
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Get host key centos7-os-0000 (boot 1)
+      ansible.builtin.shell: |
+        ssh-keyscan -t ecdsa {{ centos7_os_fip1.stdout.strip() }} 2>/dev/null | awk '{print $2, $3}'
+      register: hostkey_os_1
+      retries: 10
+      delay: 10
+      until: hostkey_os_1.stdout | length > 0
+      changed_when: false
+
+    - name: Verify SSH to centos7-os-0000 (boot 1)
+      ansible.builtin.shell: |
+        ssh -i /root/student-key-0000.pem -o StrictHostKeyChecking=no centos@{{ centos7_os_fip1.stdout.strip() }} hostname
+      register: centos7_os_ssh1
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: centos7_os_ssh1.rc == 0
+
+    - name: Delete centos7-os-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server delete --wait centos7-os-0000
+      changed_when: true
+
+    - name: Release floating IP (centos7-os boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip delete {{ centos7_os_fip1.stdout.strip() }}
+      changed_when: true
+
+    # -- centos7-openstack: Boot 2 --
+
+    - name: Boot centos7-os-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-openstack \
+          --network tenant-net-0000 \
+          --key-name student-key-0000 \
+          --wait \
+          centos7-os-0000
+      changed_when: true
+
+    - name: Create floating IP for centos7-os-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip create public -f value -c floating_ip_address
+      register: centos7_os_fip2
+      changed_when: true
+
+    - name: Assign floating IP to centos7-os-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server add floating ip centos7-os-0000 {{ centos7_os_fip2.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for centos7-os-0000 to boot (boot 2)
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Get host key centos7-os-0000 (boot 2)
+      ansible.builtin.shell: |
+        ssh-keyscan -t ecdsa {{ centos7_os_fip2.stdout.strip() }} 2>/dev/null | awk '{print $2, $3}'
+      register: hostkey_os_2
+      retries: 10
+      delay: 10
+      until: hostkey_os_2.stdout | length > 0
+      changed_when: false
+
+    - name: Delete centos7-os-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server delete --wait centos7-os-0000
+      changed_when: true
+
+    - name: Release floating IP (centos7-os boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip delete {{ centos7_os_fip2.stdout.strip() }}
+      changed_when: true
+
+    - name: Verify centos7-openstack host keys differ
+      ansible.builtin.assert:
+        that:
+          - hostkey_os_1.stdout != hostkey_os_2.stdout
+        fail_msg: "centos7-openstack host key did NOT change between boots"
+        success_msg: "centos7-openstack host key regeneration confirmed"
+
+    # -- centos7-virt: Boot 1 --
+
+    - name: Boot centos7-virt-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-virt \
+          --network tenant-net-0000 \
+          --key-name student-key-0000 \
+          --wait \
+          centos7-virt-0000
+      changed_when: true
+
+    - name: Create floating IP for centos7-virt-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip create public -f value -c floating_ip_address
+      register: centos7_virt_fip1
+      changed_when: true
+
+    - name: Assign floating IP to centos7-virt-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server add floating ip centos7-virt-0000 {{ centos7_virt_fip1.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for centos7-virt-0000 to boot (boot 1)
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Get host key centos7-virt-0000 (boot 1)
+      ansible.builtin.shell: |
+        ssh-keyscan -t ecdsa {{ centos7_virt_fip1.stdout.strip() }} 2>/dev/null | awk '{print $2, $3}'
+      register: hostkey_virt_1
+      retries: 10
+      delay: 10
+      until: hostkey_virt_1.stdout | length > 0
+      changed_when: false
+
+    - name: Verify SSH to centos7-virt-0000 (boot 1)
+      ansible.builtin.shell: |
+        ssh -i /root/student-key-0000.pem -o StrictHostKeyChecking=no centos@{{ centos7_virt_fip1.stdout.strip() }} hostname
+      register: centos7_virt_ssh1
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: centos7_virt_ssh1.rc == 0
+
+    - name: Delete centos7-virt-0000 (boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server delete --wait centos7-virt-0000
+      changed_when: true
+
+    - name: Release floating IP (centos7-virt boot 1)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip delete {{ centos7_virt_fip1.stdout.strip() }}
+      changed_when: true
+
+    # -- centos7-virt: Boot 2 --
+
+    - name: Boot centos7-virt-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-virt \
+          --network tenant-net-0000 \
+          --key-name student-key-0000 \
+          --wait \
+          centos7-virt-0000
+      changed_when: true
+
+    - name: Create floating IP for centos7-virt-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip create public -f value -c floating_ip_address
+      register: centos7_virt_fip2
+      changed_when: true
+
+    - name: Assign floating IP to centos7-virt-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server add floating ip centos7-virt-0000 {{ centos7_virt_fip2.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for centos7-virt-0000 to boot (boot 2)
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Get host key centos7-virt-0000 (boot 2)
+      ansible.builtin.shell: |
+        ssh-keyscan -t ecdsa {{ centos7_virt_fip2.stdout.strip() }} 2>/dev/null | awk '{print $2, $3}'
+      register: hostkey_virt_2
+      retries: 10
+      delay: 10
+      until: hostkey_virt_2.stdout | length > 0
+      changed_when: false
+
+    - name: Delete centos7-virt-0000 (boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server delete --wait centos7-virt-0000
+      changed_when: true
+
+    - name: Release floating IP (centos7-virt boot 2)
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack floating ip delete {{ centos7_virt_fip2.stdout.strip() }}
+      changed_when: true
+
+    - name: Verify centos7-virt host keys differ
+      ansible.builtin.assert:
+        that:
+          - hostkey_virt_1.stdout != hostkey_virt_2.stdout
+        fail_msg: "centos7-virt host key did NOT change between boots"
+        success_msg: "centos7-virt host key regeneration confirmed"
+
+    - name: Display CentOS 7 host key test results
+      ansible.builtin.debug:
+        msg:
+          - "centos7-openstack boot 1 SSH: {{ centos7_os_ssh1.stdout.strip() }}"
+          - "centos7-openstack boot 1 host key: {{ hostkey_os_1.stdout.strip() }}"
+          - "centos7-openstack boot 2 host key: {{ hostkey_os_2.stdout.strip() }}"
+          - "centos7-openstack keys differ: {{ hostkey_os_1.stdout != hostkey_os_2.stdout }}"
+          - "centos7-virt boot 1 SSH: {{ centos7_virt_ssh1.stdout.strip() }}"
+          - "centos7-virt boot 1 host key: {{ hostkey_virt_1.stdout.strip() }}"
+          - "centos7-virt boot 2 host key: {{ hostkey_virt_2.stdout.strip() }}"
+          - "centos7-virt keys differ: {{ hostkey_virt_1.stdout != hostkey_virt_2.stdout }}"
+
+# Play 3: Cleanup - delete all resources including user/project
+- name: "Test 4: User operations - Cleanup"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Delete Heat stack
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack stack show test-stack-0000 >/dev/null 2>&1 && \
+        openstack stack delete --yes --wait test-stack-0000 || true
+      changed_when: true
+
+    - name: Detach volume from VM
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        VOL_STATUS=$(openstack volume show test-vol-0000 -f value -c status 2>/dev/null || echo "missing")
+        if [ "$VOL_STATUS" = "in-use" ]; then
+          openstack server remove volume test-vm-0000 test-vol-0000
+        fi
+      changed_when: true
+
+    - name: Wait for volume detach
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack volume show test-vol-0000 -f value -c status 2>/dev/null || echo "missing"
+      register: vol_detach
+      until: vol_detach.stdout.strip() in ['available', 'missing']
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Delete VM test-vm-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show test-vm-0000 >/dev/null 2>&1 && \
+        openstack server delete --wait test-vm-0000 || true
+      changed_when: true
+
+    - name: Delete volume test-vol-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack volume show test-vol-0000 >/dev/null 2>&1 && \
+        openstack volume delete test-vol-0000 || true
+      changed_when: true
+
+    - name: Delete VM centos7-os-0000 if still exists
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show centos7-os-0000 >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-os-0000 || true
+      changed_when: true
+
+    - name: Delete VM centos7-virt-0000 if still exists
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack server show centos7-virt-0000 >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-virt-0000 || true
+      changed_when: true
+
+    - name: Release floating IPs not assigned to any server
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        for fip in $(openstack floating ip list --status DOWN -f value -c ID); do
+          openstack floating ip delete "$fip"
+        done
+      changed_when: true
+
+    - name: Remove subnet from router
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack router remove subnet tenant-router-0000 tenant-subnet-0000 2>/dev/null || true
+      changed_when: true
+
+    - name: Delete router tenant-router-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack router show tenant-router-0000 >/dev/null 2>&1 && \
+        openstack router delete tenant-router-0000 || true
+      changed_when: true
+
+    - name: Delete network tenant-net-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack network show tenant-net-0000 >/dev/null 2>&1 && \
+        openstack network delete tenant-net-0000 || true
+      changed_when: true
+
+    - name: Delete Heat template file
+      ansible.builtin.file:
+        path: /root/heat_test_0000.yaml
+        state: absent
+
+    - name: Delete keypair student-key-0000
+      ansible.builtin.shell: |
+        source /root/openrc_0000
+        openstack keypair show student-key-0000 >/dev/null 2>&1 && \
+        openstack keypair delete student-key-0000 || true
+      changed_when: true
+
+    - name: Delete keypair file
+      ansible.builtin.file:
+        path: /root/student-key-0000.pem
+        state: absent
+
+    - name: Delete user student-0000
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack user show student-0000 >/dev/null 2>&1 && \
+        openstack user delete student-0000 || true
+      changed_when: true
+
+    - name: Delete project tenant-0000
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack project show tenant-0000 >/dev/null 2>&1 && \
+        openstack project delete tenant-0000 || true
+      changed_when: true
+
+    - name: Delete openrc file
+      ansible.builtin.file:
+        path: /root/openrc_0000
+        state: absent
+
+    - name: Verify cleanup
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        echo "User student-0000: $(openstack user show student-0000 -f value -c id 2>/dev/null || echo 'DELETED')"
+        echo "Project tenant-0000: $(openstack project show tenant-0000 -f value -c id 2>/dev/null || echo 'DELETED')"
+      register: cleanup_verify
+      changed_when: false
+
+    - name: Show cleanup results
+      ansible.builtin.debug:
+        msg: "{{ cleanup_verify.stdout_lines }}"

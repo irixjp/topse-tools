@@ -1,0 +1,22 @@
+#!/bin/bash
+
+yum install -y wget crudini vim bash-completion
+yum install -y lvm2 iptables-services iptables-utils iscsi-initiator-utils scsi-target-utils targetcli iproute bridge-utils
+yum install -y plotnetcfg graphviz httpd tcpdump
+yum install -y qemu-kvm libvirt virt-manager virt-install
+yum groupinstall -y "GNOME Desktop"
+echo "RUN_FIRSTBOOT=NO" > /etc/sysconfig/firstboot
+systemctl disable initial-setup initial-setup-text initial-setup-graphical 2>/dev/null || true
+systemctl disable firewalld 2>/dev/null || true
+
+systemctl start libvirtd
+virsh net-destroy default
+virsh net-undefine default
+systemctl restart libvirtd
+
+yum clean all
+
+rm -f /etc/ssh/ssh_host_*
+rm -rf /var/lib/cloud/instance /var/lib/cloud/instances/* /var/lib/cloud/data/*
+
+shutdown -h now

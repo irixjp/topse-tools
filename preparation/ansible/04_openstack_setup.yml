@@ -1,0 +1,266 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: Configure br-ex and Horizon
+  hosts: controller
+  vars:
+    ifcfg_dir: /etc/sysconfig/network-scripts
+    external_if_facts: "{{ ansible_facts[external_interface | replace('-', '_')] }}"
+    # cloud-init が生成した（再実行時はこの Playbook が書いた）ifcfg を KEY=VALUE の dict にしたもの
+    external_ifcfg: >-
+      {{ dict(external_ifcfg_raw.content | b64decode
+              | regex_findall('(?m)^([A-Z0-9_]+)=(.*)$')
+              | map('map', 'regex_replace', '^"|"$', '') | map('list')) }}
+  tasks:
+    - name: Install network-scripts for OVS ifcfg support
+      ansible.builtin.dnf:
+        name: network-scripts
+        state: present
+
+    # cloud-init が再起動時にネットワーク設定（ifcfg）を再生成しないようにする
+    - name: Disable cloud-init network configuration
+      ansible.builtin.copy:
+        content: "network: {config: disabled}\n"
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        mode: "0644"
+
+    - name: Read {{ external_interface }} ifcfg
+      ansible.builtin.slurp:
+        src: "{{ ifcfg_dir }}/ifcfg-{{ external_interface }}"
+      register: external_ifcfg_raw
+
+    # bond0 の MAC は ifcfg の MACADDR から取る（/sys/class/net の値は NetworkManager が初期値に戻していることがある）
+    - name: Verify {{ external_interface }} is a bond with a fixed MAC
+      ansible.builtin.assert:
+        that:
+          - external_ifcfg['MACADDR'] is defined
+          - external_ifcfg['BONDING_OPTS'] is defined
+          - external_if_facts['slaves'] | default([]) | length > 0
+        fail_msg: "{{ ifcfg_dir }}/ifcfg-{{ external_interface }} に MACADDR / BONDING_OPTS がない、またはスレーブがない"
+        quiet: true
+
+    # NetworkManager は止めずに併用する。br-ex・bond0・スレーブは NM_CONTROLLED=no で legacy network サービスに任せ、
+    # eno16905（NII 管理ネットワーク）は NetworkManager の管理のままにする。
+    # 稼働中には切り替えない（LACP の再ネゴシエーションで通信が途切れる。TASK-003 の V5）。05 の再起動で反映する
+    - name: Create br-ex ifcfg
+      ansible.builtin.copy:
+        content: |
+          DEVICE=br-ex
+          DEVICETYPE=ovs
+          TYPE=OVSBridge
+          BOOTPROTO=static
+          IPADDR={{ controller_ip }}
+          PREFIX={{ ansible_facts['default_ipv4']['prefix'] }}
+          GATEWAY={{ external_gateway }}
+          DEFROUTE=yes
+          {% for ns in ansible_facts['dns']['nameservers'] | default([]) %}
+          DNS{{ loop.index }}={{ ns }}
+          {% endfor %}
+          MTU={{ external_if_facts['mtu'] }}
+          OVS_EXTRA="set bridge br-ex other-config:hwaddr=\"{{ external_ifcfg['MACADDR'] }}\""
+          ONBOOT=yes
+          NM_CONTROLLED=no
+        dest: "{{ ifcfg_dir }}/ifcfg-br-ex"
+        mode: "0644"
+
+    - name: Create {{ external_interface }} ifcfg as OVS port
+      ansible.builtin.copy:
+        content: |
+          DEVICE={{ external_interface }}
+          DEVICETYPE=ovs
+          TYPE=OVSPort
+          OVS_BRIDGE=br-ex
+          BONDING_MASTER=yes
+          BONDING_OPTS="{{ external_ifcfg['BONDING_OPTS'] }}"
+          MACADDR={{ external_ifcfg['MACADDR'] }}
+          MTU={{ external_if_facts['mtu'] }}
+          BOOTPROTO=none
+          ONBOOT=yes
+          NM_CONTROLLED=no
+        dest: "{{ ifcfg_dir }}/ifcfg-{{ external_interface }}"
+        mode: "0644"
+
+    - name: Hand {{ external_interface }} slaves over to the network service
+      ansible.builtin.lineinfile:
+        path: "{{ ifcfg_dir }}/ifcfg-{{ item }}"
+        regexp: '^NM_CONTROLLED='
+        line: NM_CONTROLLED=no
+      loop: "{{ external_if_facts['slaves'] }}"
+
+    - name: Enable legacy network service
+      ansible.builtin.systemd:
+        name: network
+        enabled: true
+
+    - name: Fix Horizon static file alias for Font Awesome
+      ansible.builtin.lineinfile:
+        path: /etc/httpd/conf.d/15-horizon_vhost.conf
+        insertafter: 'Alias /dashboard/static'
+        line: '  Alias /static "/usr/share/openstack-dashboard/static"'
+        state: present
+      register: horizon_alias
+
+    - name: Restart httpd for Horizon alias
+      ansible.builtin.systemd:
+        name: httpd
+        state: restarted
+      when: horizon_alias.changed
+
+- name: Nova tuning on compute nodes
+  hosts: compute
+  tasks:
+    - name: Set virt_type to kvm
+      ansible.builtin.ini_file:
+        path: /etc/nova/nova.conf
+        section: libvirt
+        option: virt_type
+        value: kvm
+        mode: "0640"
+
+    - name: Set cpu_mode to host-passthrough
+      ansible.builtin.ini_file:
+        path: /etc/nova/nova.conf
+        section: libvirt
+        option: cpu_mode
+        value: host-passthrough
+        mode: "0640"
+
+    - name: Set CPU overcommit ratio (x32)
+      ansible.builtin.ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: cpu_allocation_ratio
+        value: "32.0"
+        mode: "0640"
+
+    - name: Set RAM overcommit ratio (x16)
+      ansible.builtin.ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: ram_allocation_ratio
+        value: "16.0"
+        mode: "0640"
+
+    - name: Set disk overcommit ratio (x12)
+      ansible.builtin.ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: disk_allocation_ratio
+        value: "12.0"
+        mode: "0640"
+
+- name: Nova, Cinder, Keystone, Horizon tuning on controller
+  hosts: controller
+  tasks:
+    - name: Allow resize to same host
+      ansible.builtin.ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: allow_resize_to_same_host
+        value: "true"
+        mode: "0640"
+
+    - name: Disable volume zero-clear on deletion
+      ansible.builtin.ini_file:
+        path: /etc/cinder/cinder.conf
+        section: DEFAULT
+        option: volume_clear
+        value: none
+        mode: "0640"
+
+    - name: Set Keystone token expiration to 24 hours
+      ansible.builtin.ini_file:
+        path: /etc/keystone/keystone.conf
+        section: token
+        option: expiration
+        value: "86400"
+        mode: "0640"
+
+    - name: Set Horizon session timeout to 24 hours
+      ansible.builtin.lineinfile:
+        path: /etc/openstack-dashboard/local_settings
+        regexp: '^SESSION_TIMEOUT'
+        line: 'SESSION_TIMEOUT = 86400'
+
+- name: Switch Glance to standalone server
+  hosts: controller
+  tasks:
+    - name: Disable Apache Glance vhost
+      ansible.builtin.command: mv /etc/httpd/conf.d/10-glance_wsgi.conf /etc/httpd/conf.d/10-glance_wsgi.conf.disabled
+      args:
+        removes: /etc/httpd/conf.d/10-glance_wsgi.conf
+
+    - name: Remove Listen 9292 from ports.conf
+      ansible.builtin.lineinfile:
+        path: /etc/httpd/conf/ports.conf
+        regexp: 'Listen.*9292'
+        state: absent
+
+    - name: Restart Apache
+      ansible.builtin.systemd:
+        name: httpd
+        state: restarted
+
+    - name: Deploy glance-api systemd unit
+      ansible.builtin.template:
+        src: glance-api.service.j2
+        dest: /etc/systemd/system/glance-api.service
+        mode: "0644"
+
+    - name: Enable and start glance-api service
+      ansible.builtin.systemd:
+        name: glance-api
+        daemon_reload: true
+        enabled: true
+        state: started
+
+# どちらも drop-in を置くだけで、稼働中のサービスは再起動しない。05 の再起動で反映する
+- name: Service startup limits and ordering on controller
+  hosts: controller
+  tasks:
+    # Packstack はワーカー数をコア数にする（CONFIG_SERVICE_WORKERS の既定値）。64 コアでは DB 接続が数百本になり、
+    # mariadbd の open files の soft limit（systemd の既定値 1024）を使い切って新しい接続を受け付けなくなる。
+    # 旧環境（CentOS 7 + Newton）の topse-tools preparation/README.md と同じ値で上げる
+    - name: Create mariadb drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/mariadb.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Raise mariadb open files limit
+      ansible.builtin.copy:
+        content: |
+          [Service]
+          LimitNOFILE=600000
+        dest: /etc/systemd/system/mariadb.service.d/limits.conf
+        mode: "0644"
+      register: mariadb_dropin
+
+    # cinder-backup は起動時に Swift の /info を 1 度だけ問い合わせ、失敗するとバックアップドライバが初期化されないまま
+    # down になり回復しない。再起動時に swift-proxy より先に起動すると起こる（起動順の競合で、起きない回もある）。
+    # After= は起動の開始順しか保証しないので、ExecStartPre で /info が応答するまで待つ。待ちきれなくても起動は続ける
+    - name: Create cinder-backup drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/openstack-cinder-backup.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Make cinder-backup wait for the Swift proxy
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          After=openstack-swift-proxy.service
+          Wants=openstack-swift-proxy.service
+
+          [Service]
+          TimeoutStartSec=300
+          ExecStartPre=/bin/sh -c 'timeout 240 sh -c "until curl -sf --max-time 5 -o /dev/null http://{{ controller_ip }}:8080/info; do sleep 2; done" || echo "swift proxy did not respond; starting anyway" >&2; exit 0'
+        dest: /etc/systemd/system/openstack-cinder-backup.service.d/wait-swift.conf
+        mode: "0644"
+      register: cinder_backup_dropin
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: mariadb_dropin.changed or cinder_backup_dropin.changed

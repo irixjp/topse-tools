@@ -1,0 +1,8 @@
+[project]
+name = "openstack-rocky"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "ansible>=14.1.0",
+]

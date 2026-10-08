@@ -1,0 +1,27 @@
+---
+# 払い出し直後の rocky は sudo にパスワードが必要（cloud-init の /etc/sudoers.d/90-cloud-init-users）。
+# この Playbook だけを最初に 1 度 -K 付きで実行して NOPASSWD にし、以降の Playbook は -K なしで実行する。
+# site.yml には含めない。
+- name: Allow passwordless sudo for the login user
+  hosts: repo:openstack
+  gather_facts: false
+  tasks:
+    # sudoers は後に一致した規則が勝つため、90-cloud-init-users より後に読まれる名前にする
+    - name: Install NOPASSWD sudoers drop-in
+      ansible.builtin.copy:
+        content: "{{ ansible_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        dest: /etc/sudoers.d/99-{{ ansible_user }}-nopasswd
+        owner: root
+        group: root
+        mode: "0440"
+        validate: visudo -cf %s
+
+    - name: Validate the whole sudoers configuration
+      ansible.builtin.command: visudo -c
+      changed_when: false
+
+    # -k で -K のときに残った認証キャッシュを使わずに確かめる
+    - name: Verify sudo works without a password
+      ansible.builtin.command: sudo -k -n true
+      become: false
+      changed_when: false

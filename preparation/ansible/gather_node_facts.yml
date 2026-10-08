@@ -1,0 +1,17 @@
+---
+# group_vars/all.yml の IP 導出式（repo_server_ip、controller_ip 等）が参照する facts を集める。
+# 他ホストの IP を使う Playbook の冒頭で import する。facts キャッシュは使わない（リセット後に古い IP を拾わないため）。
+- name: Gather facts for node address derivation
+  hosts: repo:openstack
+  gather_facts: true
+  tasks:
+    - name: Verify the default route goes through the external interface
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['default_ipv4']['address'] is defined
+          - ansible_facts['default_ipv4']['interface'] in [external_interface, 'br-ex']
+        fail_msg: >-
+          デフォルトルートが {{ external_interface }} / br-ex を通っていない
+          （{{ ansible_facts['default_ipv4']['interface'] | default('なし') }}）。
+          この状態では導出される IP が外部ネットワークのものにならない。
+        quiet: true

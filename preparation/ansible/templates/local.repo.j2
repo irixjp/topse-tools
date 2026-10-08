@@ -1,0 +1,8 @@
+{% for repo in mirror_repos %}
+[{{ repo.id }}]
+name={{ repo.name }}
+baseurl=http://{{ repo_server_ip }}:{{ repo_server_port }}/{{ repo.id }}/
+gpgcheck=0
+enabled=1
+
+{% endfor %}

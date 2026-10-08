@@ -1,0 +1,66 @@
+#!/bin/bash
+export ROCKY_REPO_IP={{ repo_server_ip }}
+export ROCKY_REPO_HOST=reposerver-rocky9
+export CENT_REPO_HOST=reposerver-centos7
+
+echo "${ROCKY_REPO_IP} ${ROCKY_REPO_HOST} ${CENT_REPO_HOST}" >> /etc/hosts
+
+rm -f /etc/yum.repos.d/*.repo
+
+cat > /etc/yum.repos.d/local.repo << EOF
+[baseos]
+name=Rocky Linux 9 - BaseOS
+baseurl=http://${ROCKY_REPO_HOST}:8080/baseos/
+gpgcheck=0
+enabled=1
+
+[appstream]
+name=Rocky Linux 9 - AppStream
+baseurl=http://${ROCKY_REPO_HOST}:8080/appstream/
+gpgcheck=0
+enabled=1
+
+[crb]
+name=Rocky Linux 9 - CRB
+baseurl=http://${ROCKY_REPO_HOST}:8080/crb/
+gpgcheck=0
+enabled=1
+
+[extras]
+name=Rocky Linux 9 - Extras
+baseurl=http://${ROCKY_REPO_HOST}:8080/extras/
+gpgcheck=0
+enabled=1
+
+[centos-openstack-epoxy]
+name=CentOS-9 - OpenStack epoxy
+baseurl=http://${ROCKY_REPO_HOST}:8080/centos-openstack-epoxy/
+gpgcheck=0
+enabled=1
+
+[centos-ceph-reef]
+name=CentOS-9 - Ceph Reef
+baseurl=http://${ROCKY_REPO_HOST}:8080/centos-ceph-reef/
+gpgcheck=0
+enabled=1
+
+[centos-nfv-openvswitch]
+name=NFV SIG - OpenvSwitch
+baseurl=http://${ROCKY_REPO_HOST}:8080/centos-nfv-openvswitch/
+gpgcheck=0
+enabled=1
+
+[centos-rabbitmq-38]
+name=CentOS-9 - RabbitMQ 38
+baseurl=http://${ROCKY_REPO_HOST}:8080/centos-rabbitmq-38/
+gpgcheck=0
+enabled=1
+EOF
+
+dnf update -y
+dnf clean all
+
+rm -f /etc/ssh/ssh_host_*
+rm -rf /var/lib/cloud/instance /var/lib/cloud/instances/* /var/lib/cloud/data/*
+
+shutdown -h now

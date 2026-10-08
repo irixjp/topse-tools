@@ -1,0 +1,14 @@
+#!/bin/bash
+
+dnf install -y python3-{openstack,nova,cinder,heat,glance,keystone,swift,neutron}client
+dnf install -y nano jq wget vim crudini bash-completion git plotnetcfg graphviz tmux
+dnf install -y ansible-core ansible-collection-ansible-posix ansible-collection-ansible-utils ansible-collection-community-general.noarch ansible-collections-openstack.noarch
+
+openstack complete > /etc/bash_completion.d/osc.bash_completion
+
+dnf clean all
+
+rm -f /etc/ssh/ssh_host_*
+rm -rf /var/lib/cloud/instance /var/lib/cloud/instances/* /var/lib/cloud/data/*
+
+shutdown -h now

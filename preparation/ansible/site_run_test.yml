@@ -1,0 +1,24 @@
+---
+- name: "Prepare 1: Rocky 9 image registration"
+  ansible.builtin.import_playbook: 31_prepare_image_register.yml
+
+- name: "Prepare 2: Rocky 9 base image creation"
+  ansible.builtin.import_playbook: 32_prepare_base_image.yml
+
+- name: "Prepare 3: Rocky 9 console image creation"
+  ansible.builtin.import_playbook: 33_prepare_console_image.yml
+
+- name: "Prepare 5: CentOS 7 image registration"
+  ansible.builtin.import_playbook: 35_prepare_centos7_image_register.yml
+
+- name: "Prepare 6: CentOS 7 base image creation"
+  ansible.builtin.import_playbook: 36_prepare_centos7_base_image.yml
+
+- name: "Prepare 7: CentOS 7 OpenStack image creation"
+  ansible.builtin.import_playbook: 37_prepare_centos7_openstack_image.yml
+
+- name: "Prepare 8: CentOS 7 virt image creation"
+  ansible.builtin.import_playbook: 38_prepare_centos7_virt_image.yml
+
+- name: "Prepare 9: Tenant/user setup and quota configuration"
+  ansible.builtin.import_playbook: 39_prepare_tenant_setup.yml

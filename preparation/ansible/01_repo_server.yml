@@ -1,0 +1,158 @@
+---
+- name: Build repository mirror server
+  hosts: repo
+  tasks:
+    - name: Install Docker CE repo
+      ansible.builtin.command: >
+        dnf config-manager --add-repo
+        https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        creates: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Install Docker CE
+      ansible.builtin.dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Start and enable Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Pull repository image from DockerHub
+      ansible.builtin.command: docker pull {{ repo_image }}
+      register: repo_pull
+      changed_when: "'Downloaded newer image' in repo_pull.stdout"
+
+    # Existing containers are reused as-is; to change image or ports, remove the container and re-run.
+    - name: Check repository container
+      ansible.builtin.command: docker container inspect repo-rocky9-epoxy
+      register: repo_container
+      changed_when: false
+      failed_when: false
+
+    - name: Create repository container
+      ansible.builtin.command: >
+        docker run -d --name repo-rocky9-epoxy
+        --restart always
+        -p {{ repo_server_port }}:80
+        {{ repo_image }}
+      when: repo_container.rc != 0
+
+    - name: Start repository container if stopped
+      ansible.builtin.command: docker start repo-rocky9-epoxy
+      when:
+        - repo_container.rc == 0
+        - not (repo_container.stdout | from_json)[0].State.Running
+
+    - name: Wait for repository container to serve
+      ansible.builtin.uri:
+        url: "http://localhost:{{ repo_server_port }}/baseos/"
+        status_code: 200
+      register: repo_ready
+      retries: 30
+      delay: 2
+      until: repo_ready.status == 200
+
+    - name: Pull CentOS 7 Newton repository image
+      ansible.builtin.command: docker pull irixjp/topse-cloud-repo:centos7-newton-v2.1
+      register: newton_pull
+      changed_when: "'Downloaded newer image' in newton_pull.stdout"
+
+    - name: Install git
+      ansible.builtin.dnf:
+        name: git
+        state: present
+
+    - name: Clone topse-tools repository
+      ansible.builtin.git:
+        repo: https://github.com/irixjp/topse-tools.git
+        dest: /mnt/topse-tools
+        version: "{{ topse_tools_branch }}"
+
+    - name: Create DVD mount directory
+      ansible.builtin.file:
+        path: /mnt/dvd
+        state: directory
+        mode: "0755"
+
+    - name: Check CentOS 7 Newton repository container
+      ansible.builtin.command: docker container inspect repo-centos7-newton
+      register: newton_container
+      changed_when: false
+      failed_when: false
+
+    - name: Create CentOS 7 Newton repository container
+      ansible.builtin.command: >
+        docker run -d --name repo-centos7-newton
+        --restart always
+        -p 80:80
+        -v /mnt/topse-tools/hands-on:/var/www/html/hands-on
+        -v /mnt/topse-tools/preparation:/var/www/html/preparation
+        -v /mnt/dvd:/var/www/html/dvd
+        irixjp/topse-cloud-repo:centos7-newton-v2.1
+      when: newton_container.rc != 0
+
+    - name: Start CentOS 7 Newton repository container if stopped
+      ansible.builtin.command: docker start repo-centos7-newton
+      when:
+        - newton_container.rc == 0
+        - not (newton_container.stdout | from_json)[0].State.Running
+
+    # httpd in the container starts a few seconds after docker run returns
+    - name: Wait for CentOS 7 Newton container to serve
+      ansible.builtin.uri:
+        url: http://localhost/images/Cent7-Mini.iso
+        method: HEAD
+        status_code: 200
+      register: newton_ready
+      retries: 30
+      delay: 2
+      until: newton_ready.status == 200
+
+    - name: Download CentOS 7 ISO
+      ansible.builtin.get_url:
+        url: http://localhost/images/Cent7-Mini.iso
+        dest: /mnt/Cent7-Mini.iso
+        mode: "0644"
+
+    - name: Mount CentOS 7 ISO
+      ansible.posix.mount:
+        path: /mnt/dvd
+        src: /mnt/Cent7-Mini.iso
+        fstype: iso9660
+        opts: loop,ro
+        state: mounted
+
+    - name: Restart CentOS 7 Newton container after ISO mount
+      ansible.builtin.shell: docker stop repo-centos7-newton && docker start repo-centos7-newton
+      changed_when: true
+
+    - name: Open firewall ports for repo containers (if firewalld is active)
+      ansible.builtin.shell: |
+        systemctl is-active -q firewalld || { echo SKIP; exit 0; }
+        changed=0
+        for p in {{ repo_server_port }}/tcp 80/tcp; do
+          firewall-cmd -q --query-port=$p || { firewall-cmd -q --permanent --add-port=$p; changed=1; }
+        done
+        if [ $changed -eq 1 ]; then firewall-cmd -q --reload; echo CHANGED; else echo UNCHANGED; fi
+      register: fw_result
+      changed_when: fw_result.stdout | trim == 'CHANGED'
+
+    - name: Wait for repositories to be ready
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        status_code: 200
+      register: repo_check
+      retries: 30
+      delay: 10
+      until: repo_check.status == 200
+      loop:
+        - "http://localhost:{{ repo_server_port }}/baseos/"
+        - http://localhost/hands-on/
+        - http://localhost/preparation/
+        - http://localhost/dvd/repodata/

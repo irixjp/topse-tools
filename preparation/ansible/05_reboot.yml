@@ -1,0 +1,13 @@
+---
+- name: Reboot all OpenStack nodes
+  hosts: openstack
+  gather_facts: false
+  tasks:
+    - name: Reboot
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+
+    - name: Wait for services to stabilize (10 minutes)
+      ansible.builtin.pause:
+        seconds: 600
+      run_once: true

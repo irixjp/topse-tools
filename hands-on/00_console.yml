@@ -101,7 +101,6 @@ resources:
       config: |
         #!/bin/bash -ex
         export CLOUT_INIT_USER=rocky
-        export REPO_CENT7=reposerver-centos7
 
         cat << EOF > /home/${CLOUT_INIT_USER}/openrc
         export OS_AUTH_URL=http://XX.XX.XX.XX:5000/v3
@@ -113,11 +112,8 @@ resources:
         export OS_IDENTITY_API_VERSION=3
         EOF
 
-        wget ${REPO_CENT7}/hands-on/support.sh -O /home/${CLOUT_INIT_USER}/support.sh
         chown ${CLOUT_INIT_USER}:${CLOUT_INIT_USER} /home/${CLOUT_INIT_USER}/openrc
-        chown ${CLOUT_INIT_USER}:${CLOUT_INIT_USER} /home/${CLOUT_INIT_USER}/support.sh
         echo "source ~/openrc"     >> /home/${CLOUT_INIT_USER}/.bashrc
-        echo "source ~/support.sh" >> /home/${CLOUT_INIT_USER}/.bashrc
         echo "export LC_ALL=en_US.UTF-8" >> /home/${CLOUT_INIT_USER}/.bashrc
         echo "export LANG=en_US.UTF-8"   >> /home/${CLOUT_INIT_USER}/.bashrc
 

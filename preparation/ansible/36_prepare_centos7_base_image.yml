@@ -1,0 +1,159 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: "Prepare 6: CentOS 7 base image creation and verification"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Ensure keypair exists
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack keypair show key-for-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack keypair create key-for-test > /root/key-for-test.pem
+      register: keypair_result
+      changed_when: "'EXISTS' not in keypair_result.stdout"
+
+    - name: Set keypair file permissions
+      ansible.builtin.file:
+        path: /root/key-for-test.pem
+        mode: "0600"
+
+    - name: Deploy userdata file
+      ansible.builtin.template:
+        src: userdata_centos7_base.txt.j2
+        dest: /root/userdata_centos7_base.txt
+        mode: "0644"
+
+    - name: Launch work VM with userdata
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-work >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-orig \
+          --network private \
+          --key-name key-for-test \
+          --user-data /root/userdata_centos7_base.txt \
+          --wait \
+          centos7-base-work
+      register: vm_create_result
+      changed_when: "'EXISTS' not in vm_create_result.stdout"
+
+    - name: Wait for VM to shut down
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-work -f value -c status
+      register: vm_status
+      until: vm_status.stdout.strip() == 'SHUTOFF'
+      retries: 40
+      delay: 30
+      changed_when: false
+
+    - name: Create image from stopped VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-base >/dev/null 2>&1 && echo EXISTS || \
+        openstack server image create --name centos7-base --wait centos7-base-work
+      register: image_create
+      changed_when: "'EXISTS' not in image_create.stdout"
+
+    - name: Verify centos7-base image status
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-base -f value -c status
+      register: base_image_status
+      changed_when: false
+      failed_when: base_image_status.stdout.strip() != 'active'
+
+    - name: Set centos7-base image to public and protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image set --public --protected centos7-base
+      changed_when: true
+
+    - name: Delete work VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-work >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-base-work && echo DELETED || echo NOTFOUND
+      register: work_vm_delete
+      changed_when: "'DELETED' in work_vm_delete.stdout"
+
+    - name: Launch test VM from base image
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-base \
+          --network private \
+          --key-name key-for-test \
+          --wait \
+          centos7-base-test
+      register: test_vm_result
+      changed_when: "'EXISTS' not in test_vm_result.stdout"
+
+    - name: Create floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip create public -f value -c floating_ip_address
+      register: fip_result
+      changed_when: true
+
+    - name: Assign floating IP to test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server add floating ip centos7-base-test {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for VM to boot
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Verify SSH connectivity
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} hostname
+      register: ssh_hostname
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: ssh_hostname.rc == 0
+
+    - name: Verify /etc/hosts contains reposerver
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} grep reposerver /etc/hosts
+      register: hosts_check
+      changed_when: false
+      failed_when: "'reposerver-centos7' not in hosts_check.stdout"
+
+    - name: Verify local repositories
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} sudo yum repolist
+      register: repolist
+      changed_when: false
+
+    - name: Delete test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-test >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-base-test && echo DELETED || echo NOTFOUND
+      register: test_vm_delete
+      changed_when: "'DELETED' in test_vm_delete.stdout"
+
+    - name: Release floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip delete {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Display test results
+      ansible.builtin.debug:
+        msg:
+          - "VM shutdown: {{ vm_status.stdout.strip() }}"
+          - "Base image status: {{ base_image_status.stdout.strip() }}"
+          - "Floating IP: {{ fip_result.stdout.strip() }}"
+          - "SSH hostname: {{ ssh_hostname.stdout.strip() }}"
+          - "Hosts file: {{ hosts_check.stdout.strip() }}"
+          - "Repo list: {{ repolist.stdout_lines | length }} lines"
+          - "Test VM cleanup: {{ test_vm_delete.stdout }}"

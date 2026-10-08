@@ -1,0 +1,73 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: "Prepare 5: CentOS 7 image registration"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Download CentOS 7 GenericCloud image
+      ansible.builtin.get_url:
+        url: http://{{ repo_server_ip }}/images/CentOS-7-x86_64-GenericCloud.qcow2
+        dest: /tmp/CentOS-7-x86_64-GenericCloud.qcow2
+        mode: "0644"
+
+    - name: Register centos7-orig image in Glance
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-orig >/dev/null 2>&1 && echo EXISTS || \
+        openstack image create \
+          --disk-format qcow2 \
+          --container-format bare \
+          --public \
+          --protected \
+          --file /tmp/CentOS-7-x86_64-GenericCloud.qcow2 \
+          centos7-orig
+      register: image_create_result
+      changed_when: "'EXISTS' not in image_create_result.stdout"
+
+    - name: Verify image status is active
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-orig -f value -c status
+      register: image_status
+      changed_when: false
+      failed_when: image_status.stdout.strip() != 'active'
+
+    - name: Verify disk_format is qcow2
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-orig -f value -c disk_format
+      register: image_disk_format
+      changed_when: false
+      failed_when: image_disk_format.stdout.strip() != 'qcow2'
+
+    - name: Verify visibility is public
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-orig -f value -c visibility
+      register: image_visibility
+      changed_when: false
+      failed_when: image_visibility.stdout.strip() != 'public'
+
+    - name: Verify size is greater than 0
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-orig -f value -c size
+      register: image_size
+      changed_when: false
+      failed_when: image_size.stdout.strip() | int <= 0
+
+    - name: Verify image appears in list
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image list -f value -c Name | grep -q centos7-orig
+      changed_when: false
+
+    - name: Display results
+      ansible.builtin.debug:
+        msg:
+          - "Image status: {{ image_status.stdout.strip() }}"
+          - "Disk format: {{ image_disk_format.stdout.strip() }}"
+          - "Visibility: {{ image_visibility.stdout.strip() }}"
+          - "Size: {{ image_size.stdout.strip() }} bytes"

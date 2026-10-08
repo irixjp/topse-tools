@@ -1,0 +1,104 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: Verify tuning on compute nodes
+  hosts: compute
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check cpu_mode
+      ansible.builtin.shell: grep -E '^cpu_mode' /etc/nova/nova.conf
+      register: cpu_mode
+      changed_when: false
+
+    - name: Check cpu_allocation_ratio
+      ansible.builtin.shell: grep -E '^cpu_allocation_ratio' /etc/nova/nova.conf
+      register: cpu_ratio
+      changed_when: false
+
+    - name: Display compute tuning
+      ansible.builtin.debug:
+        msg:
+          - "{{ cpu_mode.stdout }}"
+          - "{{ cpu_ratio.stdout }}"
+
+- name: Verify tuning on controller and services
+  hosts: controller
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check br-ex has controller IP
+      ansible.builtin.shell: ip addr show br-ex | grep '{{ controller_ip }}'
+      changed_when: false
+
+    - name: Check volume_clear
+      ansible.builtin.shell: grep -E '^volume_clear ' /etc/cinder/cinder.conf
+      register: volume_clear
+      changed_when: false
+
+    - name: Check allow_resize_to_same_host
+      ansible.builtin.shell: grep -E '^allow_resize_to_same_host' /etc/nova/nova.conf
+      register: resize_same_host
+      changed_when: false
+
+    - name: Display controller tuning
+      ansible.builtin.debug:
+        msg:
+          - "{{ volume_clear.stdout }}"
+          - "{{ resize_same_host.stdout }}"
+
+    # 06 の判定は State（up / down）と期待する数で行う。Status（enabled / disabled）だけでは down を見逃す
+    - name: Check compute services
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack compute service list -f json -c Binary -c Host -c Status -c State
+      register: compute_services
+      changed_when: false
+
+    # ML2/OVN は agent list の呼び出しをきっかけに各 chassis の生存確認を始めるため、
+    # 直後の一覧では Metadata agent が抜けることがある。期待する数がそろうまで待つ
+    - name: Wait for all network agents to be listed and alive
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack network agent list -f json -c "Agent Type" -c Host -c Alive -c State
+      register: network_agents
+      changed_when: false
+      retries: 6
+      delay: 10
+      until: >-
+        network_agents.rc == 0 and
+        (network_agents.stdout | from_json | selectattr('Agent Type', 'search', '^OVN Controller')
+          | selectattr('Alive') | list | length) == (groups['openstack'] | length) and
+        (network_agents.stdout | from_json | selectattr('Agent Type', 'equalto', 'OVN Metadata agent')
+          | selectattr('Alive') | list | length) == (groups['compute'] | length)
+
+    - name: Check volume services
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack volume service list -f json -c Binary -c Host -c Status -c State
+      register: volume_services
+      changed_when: false
+
+    - name: Display service status
+      ansible.builtin.debug:
+        msg:
+          - "{{ compute_services.stdout | from_json | map('dict2items') | map('map', attribute='value') | map('join', ' ') | list }}"
+          - "{{ network_agents.stdout | from_json | map('dict2items') | map('map', attribute='value') | map('join', ' ') | list }}"
+          - "{{ volume_services.stdout | from_json | map('dict2items') | map('map', attribute='value') | map('join', ' ') | list }}"
+
+    - name: Fail if any compute service is down or disabled, or a nova-compute is missing
+      ansible.builtin.assert:
+        that:
+          - compute_services.stdout | from_json | rejectattr('State', 'equalto', 'up') | list | length == 0
+          - compute_services.stdout | from_json | rejectattr('Status', 'equalto', 'enabled') | list | length == 0
+          - (compute_services.stdout | from_json | selectattr('Binary', 'equalto', 'nova-compute') | list | length)
+            == (groups['compute'] | length)
+        fail_msg: compute service に down / disabled があるか、nova-compute が compute の台数（{{ groups['compute'] | length }}）に足りない
+
+    - name: Fail if any volume service is down or disabled
+      ansible.builtin.assert:
+        that:
+          - volume_services.stdout | from_json | rejectattr('State', 'equalto', 'up') | list | length == 0
+          - volume_services.stdout | from_json | rejectattr('Status', 'equalto', 'enabled') | list | length == 0
+        fail_msg: volume service に down / disabled がある（cinder-backup が down なら、Swift proxy より先に起動した可能性がある）

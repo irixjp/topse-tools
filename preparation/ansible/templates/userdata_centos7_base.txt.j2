@@ -1,0 +1,69 @@
+#!/bin/bash
+export REPO_IP={{ repo_server_ip }}
+export REPO_HOST=reposerver-centos7
+
+echo "${REPO_IP} ${REPO_HOST}" >> /etc/hosts
+
+rm -f /etc/yum.repos.d/*.repo
+
+cat > /etc/yum.repos.d/local.repo << EOF
+[base]
+name=CentOS-\$releasever - Base
+baseurl=http://${REPO_HOST}/repo/centos/7/base/
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+[updates]
+name=CentOS-\$releasever - Updates
+baseurl=http://${REPO_HOST}/repo/centos/7/updates
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+[extras]
+name=CentOS-\$releasever - Extras
+baseurl=http://${REPO_HOST}/repo/centos/7/extras
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+[epel]
+name=Extra Packages for Enterprise Linux 7 - \$basearch
+baseurl=http://${REPO_HOST}/repo/centos/7/epel
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7
+
+[openstack]
+name=OpenStack Repository
+baseurl=http://${REPO_HOST}/repo/centos/7/centos-openstack-newton
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Cloud
+
+[openstack-storage]
+name=OpenStack Storage Repository
+baseurl=http://${REPO_HOST}/repo/centos/7/centos-ceph-jewel
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Storage
+
+[openstack-qemu]
+name=OpenStack Qemu Repository
+baseurl=http://${REPO_HOST}/repo/centos/7/centos-qemu-ev
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-Virtualization
+EOF
+
+yum clean all
+yum update -y
+
+rm -f /etc/yum.repos.d/CentOS*
+rm -f /etc/yum.repos.d/epel-*
+yum clean all
+
+rm -f /etc/ssh/ssh_host_*
+rm -rf /var/lib/cloud/instance /var/lib/cloud/instances/* /var/lib/cloud/data/*
+shutdown -h now

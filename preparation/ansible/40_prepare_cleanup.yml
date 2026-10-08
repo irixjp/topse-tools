@@ -1,0 +1,231 @@
+---
+- name: "Cleanup: Remove resources created by Prepare 1-8 (playbooks 31-38)"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Delete work VM if still exists (rocky9-base-work)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-base-work >/dev/null 2>&1 && \
+        openstack server delete --wait rocky9-base-work && echo DELETED || echo NOTFOUND
+      register: rocky9_base_work_delete
+      changed_when: "'DELETED' in rocky9_base_work_delete.stdout"
+
+    - name: Delete work VM if still exists (rocky9-console-work)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-work >/dev/null 2>&1 && \
+        openstack server delete --wait rocky9-console-work && echo DELETED || echo NOTFOUND
+      register: rocky9_console_work_delete
+      changed_when: "'DELETED' in rocky9_console_work_delete.stdout"
+
+    - name: Delete work VM if still exists (centos7-base-work)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-work >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-base-work && echo DELETED || echo NOTFOUND
+      register: centos7_base_work_delete
+      changed_when: "'DELETED' in centos7_base_work_delete.stdout"
+
+    - name: Delete work VM if still exists (centos7-openstack-work)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-work >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-openstack-work && echo DELETED || echo NOTFOUND
+      register: centos7_openstack_work_delete
+      changed_when: "'DELETED' in centos7_openstack_work_delete.stdout"
+
+    - name: Delete work VM if still exists (centos7-virt-work)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-work >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-virt-work && echo DELETED || echo NOTFOUND
+      register: centos7_virt_work_delete
+      changed_when: "'DELETED' in centos7_virt_work_delete.stdout"
+
+    - name: Delete test VM if still exists (rocky9-base-test)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-base-test >/dev/null 2>&1 && \
+        openstack server delete --wait rocky9-base-test && echo DELETED || echo NOTFOUND
+      register: rocky9_base_test_delete
+      changed_when: "'DELETED' in rocky9_base_test_delete.stdout"
+
+    - name: Delete test VM if still exists (rocky9-console-test)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-test >/dev/null 2>&1 && \
+        openstack server delete --wait rocky9-console-test && echo DELETED || echo NOTFOUND
+      register: rocky9_console_test_delete
+      changed_when: "'DELETED' in rocky9_console_test_delete.stdout"
+
+    - name: Delete test VM if still exists (centos7-base-test)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-base-test >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-base-test && echo DELETED || echo NOTFOUND
+      register: centos7_base_test_delete
+      changed_when: "'DELETED' in centos7_base_test_delete.stdout"
+
+    - name: Delete test VM if still exists (centos7-openstack-test)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-test >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-openstack-test && echo DELETED || echo NOTFOUND
+      register: centos7_openstack_test_delete
+      changed_when: "'DELETED' in centos7_openstack_test_delete.stdout"
+
+    - name: Delete test VM if still exists (centos7-virt-test)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-test >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-virt-test && echo DELETED || echo NOTFOUND
+      register: centos7_virt_test_delete
+      changed_when: "'DELETED' in centos7_virt_test_delete.stdout"
+
+    - name: Release floating IPs not assigned to any server
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        for fip in $(openstack floating ip list --status DOWN -f value -c ID); do
+          openstack floating ip delete "$fip"
+        done
+      changed_when: true
+
+    - name: Delete keypair (key-for-test)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack keypair show key-for-test >/dev/null 2>&1 && \
+        openstack keypair delete key-for-test && echo DELETED || echo NOTFOUND
+      register: keypair_delete
+      changed_when: "'DELETED' in keypair_delete.stdout"
+
+    - name: Delete image (rocky9-console)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show rocky9-console >/dev/null 2>&1; then
+          openstack image set --unprotected rocky9-console 2>/dev/null || true
+          openstack image delete rocky9-console && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: rocky9_console_delete
+      changed_when: "'DELETED' in rocky9_console_delete.stdout"
+
+    - name: Delete image (rocky9-base)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show rocky9-base >/dev/null 2>&1; then
+          openstack image set --unprotected rocky9-base 2>/dev/null || true
+          openstack image delete rocky9-base && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: rocky9_base_delete
+      changed_when: "'DELETED' in rocky9_base_delete.stdout"
+
+    - name: Delete image (rocky9-orig)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show rocky9-orig >/dev/null 2>&1; then
+          openstack image set --unprotected rocky9-orig 2>/dev/null || true
+          openstack image delete rocky9-orig && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: rocky9_orig_delete
+      changed_when: "'DELETED' in rocky9_orig_delete.stdout"
+
+    - name: Delete image (centos7-virt)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show centos7-virt >/dev/null 2>&1; then
+          openstack image set --unprotected centos7-virt 2>/dev/null || true
+          openstack image delete centos7-virt && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: centos7_virt_delete
+      changed_when: "'DELETED' in centos7_virt_delete.stdout"
+
+    - name: Delete image (centos7-openstack)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show centos7-openstack >/dev/null 2>&1; then
+          openstack image set --unprotected centos7-openstack 2>/dev/null || true
+          openstack image delete centos7-openstack && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: centos7_openstack_delete
+      changed_when: "'DELETED' in centos7_openstack_delete.stdout"
+
+    - name: Delete image (centos7-base)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show centos7-base >/dev/null 2>&1; then
+          openstack image set --unprotected centos7-base 2>/dev/null || true
+          openstack image delete centos7-base && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: centos7_base_delete
+      changed_when: "'DELETED' in centos7_base_delete.stdout"
+
+    - name: Delete image (centos7-orig)
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack image show centos7-orig >/dev/null 2>&1; then
+          openstack image set --unprotected centos7-orig 2>/dev/null || true
+          openstack image delete centos7-orig && echo DELETED
+        else
+          echo NOTFOUND
+        fi
+      register: centos7_orig_delete
+      changed_when: "'DELETED' in centos7_orig_delete.stdout"
+
+    - name: Remove keypair file
+      ansible.builtin.file:
+        path: /root/key-for-test.pem
+        state: absent
+
+    - name: Remove userdata files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /root/userdata_rocky9_base.txt
+        - /root/userdata_rocky9_console.txt
+        - /root/userdata_centos7_base.txt
+        - /root/userdata_centos7_openstack.txt
+        - /root/userdata_centos7_virt.txt
+        - /root/userdata_centos7_virt_test.txt
+
+    - name: Remove downloaded image files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2
+        - /tmp/CentOS-7-x86_64-GenericCloud.qcow2
+
+    - name: Display cleanup results
+      ansible.builtin.debug:
+        msg:
+          - "rocky9-base-work VM: {{ rocky9_base_work_delete.stdout }}"
+          - "rocky9-console-work VM: {{ rocky9_console_work_delete.stdout }}"
+          - "centos7-base-work VM: {{ centos7_base_work_delete.stdout }}"
+          - "centos7-openstack-work VM: {{ centos7_openstack_work_delete.stdout }}"
+          - "centos7-virt-work VM: {{ centos7_virt_work_delete.stdout }}"
+          - "rocky9-base-test VM: {{ rocky9_base_test_delete.stdout }}"
+          - "rocky9-console-test VM: {{ rocky9_console_test_delete.stdout }}"
+          - "centos7-base-test VM: {{ centos7_base_test_delete.stdout }}"
+          - "centos7-openstack-test VM: {{ centos7_openstack_test_delete.stdout }}"
+          - "centos7-virt-test VM: {{ centos7_virt_test_delete.stdout }}"
+          - "key-for-test keypair: {{ keypair_delete.stdout }}"
+          - "rocky9-console image: {{ rocky9_console_delete.stdout }}"
+          - "rocky9-base image: {{ rocky9_base_delete.stdout }}"
+          - "rocky9-orig image: {{ rocky9_orig_delete.stdout }}"
+          - "centos7-virt image: {{ centos7_virt_delete.stdout }}"
+          - "centos7-openstack image: {{ centos7_openstack_delete.stdout }}"
+          - "centos7-base image: {{ centos7_base_delete.stdout }}"
+          - "centos7-orig image: {{ centos7_orig_delete.stdout }}"

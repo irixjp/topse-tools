@@ -1,0 +1,173 @@
+---
+- name: "Prepare 8: CentOS 7 virt image creation and verification"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Ensure keypair exists
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack keypair show key-for-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack keypair create key-for-test > /root/key-for-test.pem
+      register: keypair_result
+      changed_when: "'EXISTS' not in keypair_result.stdout"
+
+    - name: Set keypair file permissions
+      ansible.builtin.file:
+        path: /root/key-for-test.pem
+        mode: "0600"
+
+    - name: Deploy userdata file
+      ansible.builtin.copy:
+        src: files/userdata_centos7_virt.txt
+        dest: /root/userdata_centos7_virt.txt
+        mode: "0644"
+
+    - name: Launch work VM with userdata
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-work >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-base \
+          --network private \
+          --key-name key-for-test \
+          --user-data /root/userdata_centos7_virt.txt \
+          --wait \
+          centos7-virt-work
+      register: vm_create_result
+      changed_when: "'EXISTS' not in vm_create_result.stdout"
+
+    - name: Wait for VM to shut down
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-work -f value -c status
+      register: vm_status
+      until: vm_status.stdout.strip() == 'SHUTOFF'
+      retries: 40
+      delay: 30
+      changed_when: false
+
+    - name: Create image from stopped VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-virt >/dev/null 2>&1 && echo EXISTS || \
+        openstack server image create --name centos7-virt --wait centos7-virt-work
+      register: image_create
+      changed_when: "'EXISTS' not in image_create.stdout"
+
+    - name: Verify centos7-virt image status
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-virt -f value -c status
+      register: virt_image_status
+      changed_when: false
+      failed_when: virt_image_status.stdout.strip() != 'active'
+
+    - name: Set centos7-virt image to public and protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image set --public --protected centos7-virt
+      changed_when: true
+
+    - name: Delete work VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-work >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-virt-work && echo DELETED || echo NOTFOUND
+      register: work_vm_delete
+      changed_when: "'DELETED' in work_vm_delete.stdout"
+
+    - name: Deploy test VM userdata for password setup
+      ansible.builtin.copy:
+        dest: /root/userdata_centos7_virt_test.txt
+        mode: "0644"
+        content: |
+          #!/bin/bash
+          echo "password" | passwd --stdin centos
+
+    - name: Launch test VM from virt image
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-virt \
+          --network private \
+          --key-name key-for-test \
+          --user-data /root/userdata_centos7_virt_test.txt \
+          --wait \
+          centos7-virt-test
+      register: test_vm_result
+      changed_when: "'EXISTS' not in test_vm_result.stdout"
+
+    - name: Create floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip create public -f value -c floating_ip_address
+      register: fip_result
+      changed_when: true
+
+    - name: Assign floating IP to test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server add floating ip centos7-virt-test {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for VM to boot
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Verify SSH connectivity
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} hostname
+      register: ssh_hostname
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: ssh_hostname.rc == 0
+
+    - name: Verify utility packages are installed
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} rpm -q qemu-kvm-ev libvirt virt-manager httpd
+      register: util_check
+      changed_when: false
+      failed_when: util_check.rc != 0
+
+    - name: Delete test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-virt-test >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-virt-test && echo DELETED || echo NOTFOUND
+      register: test_vm_delete
+      changed_when: "'DELETED' in test_vm_delete.stdout"
+
+    - name: Release floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip delete {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Verify image visibility is public
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-virt -f value -c visibility
+      register: image_visibility
+      changed_when: false
+      failed_when: image_visibility.stdout.strip() != 'public'
+
+    - name: Verify image is protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-virt -f value -c protected
+      register: image_protected
+      changed_when: false
+      failed_when: image_protected.stdout.strip() != 'True'
+
+    - name: Display test results
+      ansible.builtin.debug:
+        msg:
+          - "VM shutdown: {{ vm_status.stdout.strip() }}"
+          - "Image status: {{ virt_image_status.stdout.strip() }}"
+          - "SSH hostname: {{ ssh_hostname.stdout.strip() }}"
+          - "Utilities: {{ util_check.stdout.strip() }}"
+          - "Image visibility: {{ image_visibility.stdout.strip() }}"

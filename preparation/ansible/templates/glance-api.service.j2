@@ -1,0 +1,13 @@
+[Unit]
+Description=Glance API Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/glance-api
+User=glance
+Group=glance
+Restart=on-failure
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

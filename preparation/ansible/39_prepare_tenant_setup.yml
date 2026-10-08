@@ -1,0 +1,115 @@
+---
+- name: "Prepare 9: Role creation, tenant/user setup, and quota configuration"
+  hosts: controller
+  become: true
+  vars:
+    role_name: student
+    students:
+      - user: student-00000
+        project: tenant-00000
+        password: pass-00000
+      - user: student-99999
+        project: tenant-99999
+        password: pass-99999
+    quota:
+      instances: 5
+      ram: 40960
+      gigabytes: 30
+      floating_ips: 2
+  tasks:
+    - name: Create role '{{ role_name }}'
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack role show {{ role_name }} >/dev/null 2>&1 || \
+        openstack role create {{ role_name }}
+      changed_when: true
+
+    - name: Create project
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack project show {{ item.project }} >/dev/null 2>&1 || \
+        openstack project create --domain default {{ item.project }}
+      loop: "{{ students }}"
+      loop_control:
+        label: "{{ item.project }}"
+      changed_when: true
+
+    - name: Create user
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack user show {{ item.user }} >/dev/null 2>&1 || \
+        openstack user create --domain default \
+          --project {{ item.project }} \
+          --password {{ item.password }} \
+          {{ item.user }}
+      loop: "{{ students }}"
+      loop_control:
+        label: "{{ item.user }}"
+      changed_when: true
+
+    - name: Assign role to user
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack role add \
+          --project {{ item.0.project }} \
+          --user {{ item.0.user }} \
+          {{ item.1 }}
+      loop: "{{ students | product([role_name, 'member']) }}"
+      loop_control:
+        label: "{{ item.0.user }} -> {{ item.1 }}"
+      changed_when: true
+
+    - name: Set quota
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack quota set \
+          --instances {{ quota.instances }} \
+          --ram {{ quota.ram }} \
+          --gigabytes {{ quota.gigabytes }} \
+          --floating-ips {{ quota.floating_ips }} \
+          {{ item.project }}
+      loop: "{{ students }}"
+      loop_control:
+        label: "{{ item.project }}"
+      changed_when: true
+
+    - name: Verify role exists
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack role show {{ role_name }} -c name -f value
+      register: role_check
+      changed_when: false
+      failed_when: "role_name not in role_check.stdout"
+
+    - name: Verify role assignment
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack role assignment list \
+          --user {{ item.user }} \
+          --project {{ item.project }} \
+          --names -c Role -f value
+      loop: "{{ students }}"
+      loop_control:
+        label: "{{ item.user }}"
+      register: assignment_check
+      changed_when: false
+      failed_when: "role_name not in assignment_check.stdout or 'member' not in assignment_check.stdout"
+
+    - name: Verify quota
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack quota show {{ item.project }}
+      loop: "{{ students }}"
+      loop_control:
+        label: "{{ item.project }}"
+      register: quota_check
+      changed_when: false
+
+    - name: Display results
+      ansible.builtin.debug:
+        msg:
+          - "Role: {{ role_check.stdout | trim }}"
+          - "{{ item.item.user }}@{{ item.item.project }}: role={{ item.stdout | trim }}"
+      loop: "{{ assignment_check.results }}"
+      loop_control:
+        label: "{{ item.item.user }}"

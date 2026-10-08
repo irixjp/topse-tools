@@ -1,0 +1,44 @@
+# 環境に依存しない値と、facts からの導出式だけを置く。
+# 環境固有の値は inventory/<env>/group_vars/all.yml に置く。
+# ここ（playbook 隣の group_vars/all）は inventory 側より優先されるため、同じ変数をここに書くと inventory 側の値が効かなくなる。
+
+repo_server_port: 8080
+repo_image: irixjp/topse-cloud-repo:rocky9-epoxy-v1.1
+
+topse_tools_branch: 2027-rocky9-dev
+
+openstack_password: openstack123
+
+mirror_repos:
+  - id: baseos
+    name: Rocky Linux 9 - BaseOS
+  - id: appstream
+    name: Rocky Linux 9 - AppStream
+  - id: crb
+    name: Rocky Linux 9 - CRB
+  - id: extras
+    name: Rocky Linux 9 - Extras
+  - id: centos-openstack-epoxy
+    name: CentOS-9 - OpenStack epoxy
+  - id: centos-ceph-reef
+    name: CentOS-9 - Ceph Reef
+  - id: centos-nfv-openvswitch
+    name: NFV SIG - OpenvSwitch
+  - id: centos-rabbitmq-38
+    name: CentOS-9 - RabbitMQ 38
+
+private_cidr: 10.0.0.0/24
+
+# ノードの IP は、デフォルトルートのソース IP（ansible_facts['default_ipv4']）から導出する。
+# 参照する Playbook は冒頭で gather_node_facts.yml を import し、repo と openstack の facts を集めて検証する。
+repo_server_ip: "{{ hostvars[groups['repo'][0]]['ansible_facts']['default_ipv4']['address'] }}"
+controller_ip: "{{ hostvars[groups['controller'][0]]['ansible_facts']['default_ipv4']['address'] }}"
+compute_ips: "{{ groups['compute'] | map('extract', hostvars, ['ansible_facts', 'default_ipv4', 'address']) | list }}"
+all_openstack_ips: "{{ groups['openstack'] | map('extract', hostvars, ['ansible_facts', 'default_ipv4', 'address']) | list }}"
+
+# /etc/hosts に入れる行（openstack グループの全ノード、1 行 1 ノード）。
+# 「IP 実ホスト名（FQDN） 短いホスト名 inventory 名」の形。実ホスト名を入れないと、ホスト名が IPv6 リンクローカルにしか解決されない。
+etc_hosts_entries: |-
+  {% for h in groups['openstack'] %}
+  {{ [hostvars[h]['ansible_facts']['default_ipv4']['address'], hostvars[h]['ansible_facts']['nodename'], hostvars[h]['ansible_facts']['hostname'], h] | unique | join(' ') }}
+  {% endfor %}

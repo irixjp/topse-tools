@@ -1,0 +1,121 @@
+---
+- name: Gather node facts for address derivation
+  ansible.builtin.import_playbook: gather_node_facts.yml
+
+- name: OpenStack environment setup
+  hosts: controller
+  become: true
+  tasks:
+    - name: Download cirros image from repo server
+      ansible.builtin.get_url:
+        url: "http://{{ repo_server_ip }}:{{ repo_server_port }}/cirros.img"
+        dest: /tmp/cirros.img
+        mode: "0644"
+
+    - name: Register cirros image in Glance
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show cirros >/dev/null 2>&1 && echo EXISTS || \
+        openstack image create --disk-format qcow2 --container-format bare \
+          --public --file /tmp/cirros.img cirros
+      register: image_result
+      changed_when: "'EXISTS' not in image_result.stdout"
+
+    - name: Delete default flavors
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        for f in $(openstack flavor list -f value -c Name); do
+          openstack flavor delete "$f"
+        done
+      changed_when: true
+
+    - name: Create custom flavors
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack flavor show {{ item.name }} >/dev/null 2>&1 && echo EXISTS || \
+        openstack flavor create --id {{ item.id }} --ram {{ item.ram }} --disk {{ item.disk }} --vcpus {{ item.vcpus }} {{ item.name }}
+      loop:
+        - { name: m1.tiny,   id: 100, ram: 1024,  disk: 20,  vcpus: 1 }
+        - { name: m1.small,  id: 101, ram: 2048,  disk: 20,  vcpus: 1 }
+        - { name: m1.medium, id: 102, ram: 4096,  disk: 40,  vcpus: 1 }
+        - { name: m1.large,  id: 103, ram: 8192,  disk: 100, vcpus: 2 }
+        - { name: m1.xlarge, id: 104, ram: 16384, disk: 100, vcpus: 4 }
+      register: flavor_result
+      changed_when: "'EXISTS' not in flavor_result.stdout"
+
+    - name: Create private network
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack network show private >/dev/null 2>&1 && echo EXISTS || \
+        openstack network create private
+      register: net_result
+      changed_when: "'EXISTS' not in net_result.stdout"
+
+    - name: Create private subnet
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack subnet show private_subnet >/dev/null 2>&1 && echo EXISTS || \
+        openstack subnet create private_subnet \
+          --network private \
+          --subnet-range {{ private_cidr }} \
+          --dns-nameserver 8.8.8.8
+      register: subnet_result
+      changed_when: "'EXISTS' not in subnet_result.stdout"
+
+    - name: Create public (external) network
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack network show public >/dev/null 2>&1 && echo EXISTS || \
+        openstack network create --external \
+          --provider-physical-network extnet \
+          --provider-network-type flat public
+      register: pubnet_result
+      changed_when: "'EXISTS' not in pubnet_result.stdout"
+
+    - name: Create public subnet
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack subnet show public_subnet >/dev/null 2>&1 && echo EXISTS || \
+        openstack subnet create public_subnet \
+          --network public --no-dhcp \
+          --gateway {{ external_gateway }} \
+          --subnet-range {{ external_cidr }} \
+          --allocation-pool start={{ floating_ip_start }},end={{ floating_ip_end }}
+      register: pubsub_result
+      changed_when: "'EXISTS' not in pubsub_result.stdout"
+
+    - name: Create router
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack router show router1 >/dev/null 2>&1 && echo EXISTS || \
+        openstack router create router1
+      register: router_result
+      changed_when: "'EXISTS' not in router_result.stdout"
+
+    - name: Set router external gateway
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack router set router1 --external-gateway public
+      changed_when: true
+
+    - name: Add private subnet to router
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack router add subnet router1 private_subnet 2>/dev/null || true
+      changed_when: true
+
+    - name: Add ICMP security group rule
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack security group rule list default -f value | grep -q icmp && echo EXISTS || \
+        openstack security group rule create --proto icmp default
+      register: icmp_result
+      changed_when: "'EXISTS' not in icmp_result.stdout"
+
+    - name: Add SSH security group rule
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack security group rule list default -f value | grep -q 'tcp.*22:22' && echo EXISTS || \
+        openstack security group rule create --proto tcp --dst-port 22 default
+      register: ssh_result
+      changed_when: "'EXISTS' not in ssh_result.stdout"

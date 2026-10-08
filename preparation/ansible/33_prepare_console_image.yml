@@ -1,0 +1,176 @@
+---
+- name: "Prepare 3: Console image creation and verification"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Deploy userdata file
+      ansible.builtin.copy:
+        src: files/userdata_rocky9_console.txt
+        dest: /root/userdata_rocky9_console.txt
+        mode: "0644"
+
+    - name: Launch work VM with userdata
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-work >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image rocky9-base \
+          --network private \
+          --key-name key-for-test \
+          --user-data /root/userdata_rocky9_console.txt \
+          --wait \
+          rocky9-console-work
+      register: vm_create_result
+      changed_when: "'EXISTS' not in vm_create_result.stdout"
+
+    - name: Wait for VM to shut down
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-work -f value -c status
+      register: vm_status
+      until: vm_status.stdout.strip() == 'SHUTOFF'
+      retries: 40
+      delay: 30
+      changed_when: false
+
+    - name: Create image from stopped VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-console >/dev/null 2>&1 && echo EXISTS || \
+        openstack server image create --name rocky9-console --wait rocky9-console-work
+      register: image_create
+      changed_when: "'EXISTS' not in image_create.stdout"
+
+    - name: Verify rocky9-console image status
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-console -f value -c status
+      register: console_image_status
+      changed_when: false
+      failed_when: console_image_status.stdout.strip() != 'active'
+
+    - name: Delete work VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-work >/dev/null 2>&1 && \
+        openstack server delete rocky9-console-work || true
+      changed_when: true
+
+    - name: Launch test VM from console image
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image rocky9-console \
+          --network private \
+          --key-name key-for-test \
+          --wait \
+          rocky9-console-test
+      register: test_vm_result
+      changed_when: "'EXISTS' not in test_vm_result.stdout"
+
+    - name: Create floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip create public -f value -c floating_ip_address
+      register: fip_result
+      changed_when: true
+
+    - name: Assign floating IP to test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server add floating ip rocky9-console-test {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for VM to boot
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Verify SSH connectivity
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null rocky@{{ fip_result.stdout.strip() }} hostname
+      register: ssh_hostname
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: ssh_hostname.rc == 0
+
+    - name: Verify openstack client is installed
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null rocky@{{ fip_result.stdout.strip() }} rpm -q python3-openstackclient
+      register: osc_check
+      changed_when: false
+      failed_when: osc_check.rc != 0
+
+    - name: Verify ansible is installed
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null rocky@{{ fip_result.stdout.strip() }} which ansible
+      register: ansible_check
+      changed_when: false
+      failed_when: ansible_check.rc != 0
+
+    - name: Verify utility packages are installed
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null rocky@{{ fip_result.stdout.strip() }} rpm -q jq vim-enhanced tmux git
+      register: util_check
+      changed_when: false
+      failed_when: util_check.rc != 0
+
+    - name: Verify openstack bash completion exists
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null rocky@{{ fip_result.stdout.strip() }} test -f /etc/bash_completion.d/osc.bash_completion
+      register: completion_check
+      changed_when: false
+      failed_when: completion_check.rc != 0
+
+    - name: Set rocky9-console image to public and protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image set --public --protected rocky9-console
+      changed_when: true
+
+    - name: Verify image visibility is public
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-console -f value -c visibility
+      register: image_visibility
+      changed_when: false
+      failed_when: image_visibility.stdout.strip() != 'public'
+
+    - name: Verify image is protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show rocky9-console -f value -c protected
+      register: image_protected
+      changed_when: false
+      failed_when: image_protected.stdout.strip() != 'True'
+
+    - name: Delete test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show rocky9-console-test >/dev/null 2>&1 && \
+        openstack server delete --wait rocky9-console-test && echo DELETED || echo NOTFOUND
+      register: test_vm_delete
+      changed_when: "'DELETED' in test_vm_delete.stdout"
+
+    - name: Release floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip delete {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Display test results
+      ansible.builtin.debug:
+        msg:
+          - "SSH hostname: {{ ssh_hostname.stdout.strip() }}"
+          - "VM shutdown: {{ vm_status.stdout.strip() }}"
+          - "Console image status: {{ console_image_status.stdout.strip() }}"
+          - "Floating IP: {{ fip_result.stdout.strip() }}"
+          - "openstack client: {{ osc_check.stdout.strip() }}"
+          - "ansible: {{ ansible_check.stdout.strip() }}"
+          - "utilities (jq,vim,tmux,git): {{ util_check.stdout.strip() }}"
+          - "bash completion: present"
+          - "Image visibility: {{ image_visibility.stdout.strip() }}"
+          - "Test VM cleanup: {{ test_vm_delete.stdout }}"

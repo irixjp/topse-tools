@@ -1,0 +1,23 @@
+# 環境の固有値の雛形。値はすべて例（外部ネットワークは文書用のアドレス 203.0.113.0/24）なので、環境に合わせて書き換える。
+# ノードの IP はここに書かない（facts から導出する。../../../group_vars/all.yml を参照）。
+
+# ノードが外部ネットワークに接続する NIC（br-ex の OVS ポートになる）
+external_interface: bond0
+
+# 外部ネットワーク（public サブネット）と Floating IP の範囲
+# 受講者 1 名で Floating IP を 3 個使う。範囲には受講者数 × 3 に講師・予備を足した数を確保する。
+external_cidr: 203.0.113.0/24
+external_gateway: 203.0.113.1
+floating_ip_start: 203.0.113.50
+floating_ip_end: 203.0.113.200
+
+# Cinder / Swift のループバックファイルを置く HDD 上のディレクトリ（controller）。
+# 02 が Packstack の固定の配置先（/var/lib/cinder、/srv/loopback-device）へここから bind mount する。
+# 親のマウントポイント（HDD）を loopback_storage_mount に書く。02 はそこがマウントされていることを確かめる。
+loopback_storage_mount: /mnt
+loopback_storage_dir: /mnt/openstack
+
+# Cinder / Swift のループバックのサイズ（スパースファイル。書き込むまで HDD を消費しない）。
+# 受講者は母艦の Cinder / Swift を使わず、講師のデモ用のみ。
+cinder_volumes_size: 500G
+swift_storage_size: 500G

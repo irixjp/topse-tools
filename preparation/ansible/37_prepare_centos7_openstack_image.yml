@@ -1,0 +1,164 @@
+---
+- name: "Prepare 7: CentOS 7 OpenStack image creation and verification"
+  hosts: controller
+  become: true
+  tasks:
+    - name: Ensure keypair exists
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack keypair show key-for-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack keypair create key-for-test > /root/key-for-test.pem
+      register: keypair_result
+      changed_when: "'EXISTS' not in keypair_result.stdout"
+
+    - name: Set keypair file permissions
+      ansible.builtin.file:
+        path: /root/key-for-test.pem
+        mode: "0600"
+
+    - name: Deploy userdata file
+      ansible.builtin.copy:
+        src: files/userdata_centos7_openstack.txt
+        dest: /root/userdata_centos7_openstack.txt
+        mode: "0644"
+
+    - name: Launch work VM with userdata
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-work >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-base \
+          --network private \
+          --key-name key-for-test \
+          --user-data /root/userdata_centos7_openstack.txt \
+          --wait \
+          centos7-openstack-work
+      register: vm_create_result
+      changed_when: "'EXISTS' not in vm_create_result.stdout"
+
+    - name: Wait for VM to shut down
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-work -f value -c status
+      register: vm_status
+      until: vm_status.stdout.strip() == 'SHUTOFF'
+      retries: 40
+      delay: 30
+      changed_when: false
+
+    - name: Create image from stopped VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-openstack >/dev/null 2>&1 && echo EXISTS || \
+        openstack server image create --name centos7-openstack --wait centos7-openstack-work
+      register: image_create
+      changed_when: "'EXISTS' not in image_create.stdout"
+
+    - name: Verify centos7-openstack image status
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-openstack -f value -c status
+      register: openstack_image_status
+      changed_when: false
+      failed_when: openstack_image_status.stdout.strip() != 'active'
+
+    - name: Delete work VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-work >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-openstack-work && echo DELETED || echo NOTFOUND
+      register: work_vm_delete
+      changed_when: "'DELETED' in work_vm_delete.stdout"
+
+    - name: Launch test VM from openstack image
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-test >/dev/null 2>&1 && echo EXISTS || \
+        openstack server create \
+          --flavor m1.small \
+          --image centos7-openstack \
+          --network private \
+          --key-name key-for-test \
+          --wait \
+          centos7-openstack-test
+      register: test_vm_result
+      changed_when: "'EXISTS' not in test_vm_result.stdout"
+
+    - name: Create floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip create public -f value -c floating_ip_address
+      register: fip_result
+      changed_when: true
+
+    - name: Assign floating IP to test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server add floating ip centos7-openstack-test {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Wait for VM to boot
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Verify SSH connectivity
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} hostname
+      register: ssh_hostname
+      changed_when: false
+      retries: 5
+      delay: 10
+      until: ssh_hostname.rc == 0
+
+    - name: Verify utility packages are installed
+      ansible.builtin.shell: |
+        ssh -i /root/key-for-test.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null centos@{{ fip_result.stdout.strip() }} rpm -q wget crudini vim-enhanced bash-completion lynx
+      register: util_check
+      changed_when: false
+      failed_when: util_check.rc != 0
+
+    - name: Delete test VM
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack server show centos7-openstack-test >/dev/null 2>&1 && \
+        openstack server delete --wait centos7-openstack-test && echo DELETED || echo NOTFOUND
+      register: test_vm_delete
+      changed_when: "'DELETED' in test_vm_delete.stdout"
+
+    - name: Release floating IP
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack floating ip delete {{ fip_result.stdout.strip() }}
+      changed_when: true
+
+    - name: Set centos7-openstack image to public and protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image set --public --protected centos7-openstack
+      changed_when: true
+
+    - name: Verify image visibility is public
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-openstack -f value -c visibility
+      register: image_visibility
+      changed_when: false
+      failed_when: image_visibility.stdout.strip() != 'public'
+
+    - name: Verify image is protected
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        openstack image show centos7-openstack -f value -c protected
+      register: image_protected
+      changed_when: false
+      failed_when: image_protected.stdout.strip() != 'True'
+
+    - name: Display test results
+      ansible.builtin.debug:
+        msg:
+          - "VM shutdown: {{ vm_status.stdout.strip() }}"
+          - "Image status: {{ openstack_image_status.stdout.strip() }}"
+          - "SSH hostname: {{ ssh_hostname.stdout.strip() }}"
+          - "Utilities: {{ util_check.stdout.strip() }}"
+          - "Image visibility: {{ image_visibility.stdout.strip() }}"

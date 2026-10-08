@@ -1,0 +1,21 @@
+---
+- name: Phase 1 - Build repository mirror server
+  ansible.builtin.import_playbook: 01_repo_server.yml
+
+- name: Phase 2-3 - Install preparation
+  ansible.builtin.import_playbook: 02_install_prep.yml
+
+- name: Phase 4-5 - Packstack execution
+  ansible.builtin.import_playbook: 03_packstack.yml
+
+- name: Phase 6 - Tuning and bug fixes
+  ansible.builtin.import_playbook: 04_openstack_setup.yml
+
+- name: Phase 7 - Reboot all nodes
+  ansible.builtin.import_playbook: 05_reboot.yml
+
+- name: Phase 8 - Verification
+  ansible.builtin.import_playbook: 06_verify.yml
+
+- name: Phase 9 - OpenStack environment setup
+  ansible.builtin.import_playbook: 11_openstack_resources.yml

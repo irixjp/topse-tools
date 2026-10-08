@@ -1,0 +1,46 @@
+---
+- name: Packstack execution
+  hosts: controller
+  tasks:
+    - name: Run Packstack via nohup
+      ansible.builtin.shell: |
+        nohup packstack --timeout=3600 --answer-file=/root/packstack-answers.conf \
+          > /root/packstack.log 2>&1 &
+        echo $!
+      register: packstack_pid
+      changed_when: true
+
+    - name: Wait for Packstack to complete (up to 90 minutes)
+      ansible.builtin.shell: |
+        if grep -q "Installation completed successfully" /root/packstack.log 2>/dev/null; then
+          echo "SUCCESS"
+        elif grep -q "ERROR" /root/packstack.log 2>/dev/null; then
+          echo "ERROR"
+        elif kill -0 {{ packstack_pid.stdout | trim }} 2>/dev/null; then
+          echo "RUNNING"
+        else
+          echo "DEAD"
+        fi
+      register: packstack_status
+      until: packstack_status.stdout in ["SUCCESS", "ERROR", "DEAD"]
+      retries: 90
+      delay: 60
+      changed_when: false
+
+    - name: Fail if Packstack did not succeed
+      ansible.builtin.fail:
+        msg: "Packstack failed. Check /root/packstack.log on CC."
+      when: packstack_status.stdout != "SUCCESS"
+
+- name: Reboot all OpenStack nodes after Packstack
+  hosts: openstack
+  gather_facts: false
+  tasks:
+    - name: Reboot
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+
+    - name: Wait for services to stabilize (10 minutes)
+      ansible.builtin.pause:
+        seconds: 600
+      run_once: true
