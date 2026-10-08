@@ -1,4 +1,0 @@
----
-tunn_nic: eno2
-cinder_size: 500G
-swift_size: 200G

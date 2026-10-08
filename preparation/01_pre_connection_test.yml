@@ -1,6 +1,0 @@
----
-- name: connection test to all nodes
-  hosts: openstack-all
-  gather_facts: no
-  roles:
-    - wait_boot
