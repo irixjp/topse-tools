@@ -16,9 +16,9 @@ repo サーバーは、構築時にこのリポジトリを clone し、`hands-o
 正本の所在
 ------------
 
-`hands-on/` と、`preparation/` の `ansible/`・`docker/`・`pyproject.toml`・`uv.lock` は、講師の手元の正本のリポジトリ（openstack-rocky）から自動で同期される写しである。正本でコミットするたびに、同期の結果が `Sync from openstack-rocky <コミット>` というコミットとしてこのリポジトリに入る。
+`hands-on/` と、`preparation/` の `ansible/`・`docker/`・`pyproject.toml`・`uv.lock`・`README.md` は、講師の手元の正本のリポジトリ（openstack-rocky）から自動で同期される写しである。正本でコミットするたびに、同期の結果が `Sync from openstack-rocky <コミット>` というコミットとしてこのリポジトリに入る。
 
-これらはこのリポジトリで直接編集しない。直接編集しても、次の同期で上書きされる。このリポジトリで直接編集するのは、この README と `preparation/README.md` だけである。
+これらはこのリポジトリで直接編集しない。直接編集しても、次の同期で上書きされる。このリポジトリで直接編集するのは、この README だけである（`preparation/README.md` の正本は openstack-rocky の `ansible/README.md`）。
 
 公開リポジトリなので、実際の環境の inventory は載せない。`preparation/ansible/inventory/example/` の雛形を複製して使う。
 
