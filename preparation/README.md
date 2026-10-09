@@ -1,9 +1,9 @@
 TOPSE「クラウド基盤構築演習」環境構築方法
 =========
 
-NII 研究クラウドのベアメタル上に、Rocky Linux 9 + OpenStack Epoxy（2025.1、Packstack）の母艦 OpenStack を Ansible で構築し、演習用のイメージとテナントを準備する。
+NII 研究クラウドのベアメタル上に、Rocky Linux 9 + OpenStack Epoxy（2025.1、Packstack）の母艦 OpenStack を Ansible で構築し、演習用のイメージとテナントを準備して、受講者と同じ手順で演習環境を作って確かめる。
 
-このディレクトリの `ansible/`・`docker/`・`pyproject.toml`・`uv.lock` は、正本のリポジトリ（openstack-rocky）から自動で同期される写しである。ここでは直接編集しない（この README を除く）。詳しくはリポジトリのルートの [README.md](../README.md) を参照。
+このディレクトリ（`preparation/`）は、この README を含めて、正本のリポジトリ（openstack-rocky）から自動で同期される写しである。ここでは直接編集しない。この README の正本は openstack-rocky の `ansible/README.md`。詳しくはリポジトリのルートの [README.md](../README.md) を参照。
 
 研究クラウド側の準備
 ------------
@@ -71,7 +71,7 @@ uv run ansible-playbook site.yml                  # 01〜06・11 を順に実行
 
 | Playbook | 内容 |
 |---|---|
-| `01_repo_server.yml` | repo サーバーに RPM のミラーと演習資材の配信（このリポジトリを clone）を用意する |
+| `01_repo_server.yml` | repo サーバーに RPM のミラーと演習資材の配信（topse-tools を clone）を用意する |
 | `02_install_prep.yml` | 各ノードの共通設定と Packstack の準備 |
 | `03_packstack.yml` | Packstack の実行と再起動 |
 | `04_openstack_setup.yml` | br-ex の設定、チューニング |
@@ -95,11 +95,127 @@ uv run ansible-playbook site_run_test.yml   # 31〜39 を順に実行する
 | `35`〜`38` | CentOS 7 のイメージの登録、base・openstack・virt イメージの作成（入れ子の OpenStack 用） |
 | `39_prepare_tenant_setup.yml` | student ロール、受講者のテナント・ユーザー、クォータの作成 |
 
-受講者のアカウントは、`39_prepare_tenant_setup.yml` の `students` を出欠表の学籍番号などで書き換えて作る（ユーザー `student-<番号>`、テナント `tenant-<番号>`、パスワード `pass-<番号>`）。
+受講者のアカウントは、`39_prepare_tenant_setup.yml` の `students` を出欠表の学籍番号などで書き換えて作る（ユーザー `student-<番号>`、テナント `tenant-<番号>`、パスワード `pass-<番号>`）。既定では講師の確認用に `student-00000`（`tenant-00000`）と `student-99999`（`tenant-99999`）を作る。
 
 `40_prepare_cleanup.yml` は 31〜38 が作ったもの（作業用・試験用の VM、キーペア、イメージ）をすべて削除する。イメージの作り直しのときにだけ使い、演習の前には実行しない。
 
-受講者の演習の資材
+演習環境の構築
 ------------
 
+受講者と同じ手順で演習環境を作り、母艦の上で演習が動くことを確かめる。講師の確認には `student-00000` を使う。
+
 受講者は、repo サーバーの `http://<repo サーバー>/hands-on/` から heat テンプレートと playbook を取得する（このリポジトリの [hands-on/](../hands-on/)）。
+
+| テンプレート | 作るもの | 所要時間の目安 |
+|---|---|---|
+| `00_console.yml` | 作業用ネットワーク `work-net`（192.168.199.0/24）、ルーター `Ext-Router`、作業用の console サーバー（Rocky 9、Floating IP 付き） | 1〜2 分 |
+| `02_vm_vnet_vstr.yml` | 仮想化の演習用の `handson02-virt`（CentOS 7、KVM）と、ネットワーク・ストレージの演習用の `handson02-vnet`（CentOS 7、Floating IP 付き） | 1〜2 分 |
+| `08_openstack_single.yml` | 入れ子の OpenStack（all-in-one）用の `handson08-openstack-single`（CentOS 7） | スタック 1 分、playbook 約 10 分 |
+| `10_openstack_multi.yml` | 入れ子の OpenStack（cc 1 台 + compute 2 台）用の `handson10-openstack-{cc,node1,node2}`（CentOS 7） | スタック 1〜2 分、playbook 約 12 分 |
+
+1 名のクォータ（インスタンス 5、RAM 40GB、Floating IP 2）に収まるのは、console と、ほかの演習環境 1 つまで。次の演習環境を作る前に、前のスタックを削除する。
+
+### 1. console の作成（Horizon）
+
+1. ブラウザで Horizon（`http://<cc サーバーの外部 IP>/dashboard`）に `student-00000` / `pass-00000` でログインする
+2. 「オーケストレーション」→「スタック」→「スタックの起動」で、テンプレートのソースに URL `http://<repo サーバー>/hands-on/00_console.yml` を指定する（または、ファイルの内容を「直接入力」に貼り付ける）
+3. スタック名（例: `console`）と、console のパスワード（`password`）を入力して起動する
+4. スタックが「作成完了」になったら、「概要」の出力 `console` で Floating IP を確かめる
+
+手元の端末から console に `rocky` ユーザーでログインする（パスワードは 3. で入力したもの）。
+
+```bash
+ssh rocky@<console の Floating IP>
+```
+
+console の `~/openrc` は仮の値で作られる。自分のアカウントに書き換える。
+
+```bash
+vi ~/openrc
+#   OS_AUTH_URL=http://<cc サーバーの外部 IP>:5000/v3
+#   OS_PROJECT_NAME=tenant-00000
+#   OS_USERNAME=student-00000
+#   OS_PASSWORD=pass-00000
+source ~/openrc
+openstack token issue      # 認証が通ること
+openstack stack list       # console のスタックが CREATE_COMPLETE
+```
+
+ログインしたシェルでは、プロンプトの先頭に `[CONSOLE]` が出て、`~/openrc` が読み込まれ、`LC_ALL=en_US.UTF-8` が設定されている。
+
+以降の作業はすべて console で行う。console は演習の期間中は削除しない。
+
+### 2. 演習の資材の取得
+
+console は repo サーバーを `reposerver-centos7` の名前で引ける。
+
+```bash
+cd ~
+for f in 02_vm_vnet_vstr.yml \
+         08_openstack_single.yml 08_openstack_single_inventory.yml \
+         08_openstack_single_playbook.yml 08_openstack_single_test_playbook.yml \
+         10_openstack_multi.yml 10_openstack_multi_inventory \
+         10_openstack_multi_playbook.yml 10_openstack_multi_test_playbook.yml; do
+  curl -fsSO http://reposerver-centos7/hands-on/$f
+done
+ls
+```
+
+### 3. 02: 仮想化・仮想ネットワーク・仮想ストレージの演習環境
+
+```bash
+openstack stack create -t 02_vm_vnet_vstr.yml --wait handson02
+openstack stack output show handson02 --all
+openstack server list
+```
+
+`handson02-virt`（192.168.199.10）と `handson02-vnet`（192.168.199.11）に、console から `centos` / `password` でログインできることを確かめる。
+
+```bash
+ssh centos@192.168.199.10    # プロンプト [VIRT]。libvirtd が動き、/dev/kvm がある
+ssh centos@192.168.199.11    # プロンプト [VNET]。target・iscsid・httpd が動いている
+```
+
+確かめたら削除する。
+
+```bash
+openstack stack delete -y --wait handson02
+```
+
+### 4. 08: 入れ子の OpenStack（all-in-one）
+
+スタックを作り、playbook で入れ子の OpenStack（Newton）を Packstack で構築する。
+
+```bash
+openstack stack create -t 08_openstack_single.yml --wait handson08
+ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_playbook.yml
+```
+
+テスト用 playbook で、入れ子の OpenStack の上に cirros の VM 2 台を作り、VM 間の通信と Floating IP での ping・ssh を確かめる。最後の `PLAY RECAP` で `failed=0` であること。
+
+```bash
+ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_test_playbook.yml
+```
+
+テスト用のリソース（cirros の VM、ネットワーク等）は入れ子の OpenStack に残る。スタックを残したまま消すときは `-e cleanup=true` を付けて再実行する。
+
+確かめたら削除する。
+
+```bash
+openstack stack delete -y --wait handson08
+```
+
+### 5. 10: 入れ子の OpenStack（複数ノード）
+
+08 と同じ流れで、cc 1 台と compute 2 台の入れ子の OpenStack を作る。テスト用 playbook は VM 2 台を別々の compute に置き、compute をまたいだ通信（VXLAN）も確かめる。
+
+```bash
+openstack stack create -t 10_openstack_multi.yml --wait handson10
+ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_playbook.yml
+ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_test_playbook.yml
+openstack stack delete -y --wait handson10
+```
+
+### 6. 後片付け
+
+講師の確認が終わったら、Horizon の「スタック」で console のスタックを削除し、スタックが残っていないことを確かめる。
