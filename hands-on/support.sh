@@ -25,12 +25,15 @@ CS_06_KEY=handson06-key
 _cs_template()  { case $1 in 02) echo 02_vm_vnet_vstr.yml ;; 08) echo 08_openstack_single.yml ;; 10) echo 10_openstack_multi.yml ;; esac; }
 _cs_inventory() { case $1 in 08) echo 08_openstack_single_inventory.yml ;; 10) echo 10_openstack_multi_inventory ;; esac; }
 _cs_playbook()  { case $1 in 08) echo 08_openstack_single_playbook.yml ;; 10) echo 10_openstack_multi_playbook.yml ;; esac; }
+# create の所要時間（スタックの作成と構築 playbook の合計。ステージング環境の実測 1 分半・10 分半・12 分半）
+_cs_minutes()   { case $1 in 02) echo 2 ;; 08) echo 11 ;; 10) echo 13 ;; esac; }
+_cs_build_msg() { case $1 in 08) echo 演習用のシングルノード openstack 環境を構築します ;; 10) echo 演習用のマルチノード openstack 環境を構築します ;; esac; }
 
 _cs_usage() {
   cat <<'EOF'
 使い方:
   cloud-support ls                  演習環境の一覧
-  cloud-support create 02|08|10     演習環境を作る（08/10 は入れ子の OpenStack の構築まで）
+  cloud-support create 02|08|10     演習環境を作る（08/10 は演習用の openstack 環境の構築まで）
   cloud-support delete 02|06|08|10  演習環境を消す（消す前に確認する）
   cloud-support check               演習外で作られたリソース（ゴミ）を報告する
   cloud-support log 08|10           構築のログを表示する
@@ -163,6 +166,7 @@ _cs_create() {
     return 1
   fi
 
+  echo "演習環境 $n を作成します（全体で約 $(_cs_minutes "$n") 分かかります）"
   files="$(_cs_template "$n") $(_cs_inventory "$n") $(_cs_playbook "$n")"
   mkdir -p "$CS_DIR/$n"
   for f in $files; do
@@ -174,7 +178,7 @@ _cs_create() {
   done
 
   stack="handson$n"
-  echo "スタック $stack を作成します（1〜2 分）"
+  echo "スタック $stack を作成します"
   (cd "$CS_DIR/$n" && openstack stack create -t "$(_cs_template "$n")" --wait "$stack")
   status=$(openstack stack show "$stack" -f value -c stack_status 2> /dev/null)
   if [ "$status" != CREATE_COMPLETE ]; then
@@ -189,7 +193,7 @@ _cs_create() {
   openstack stack output show "$stack" --all
   case $n in 08|10) ;; *) return 0 ;; esac
 
-  echo "入れ子の OpenStack を構築します（10〜12 分）"
+  _cs_build_msg "$n"
   _cs_build_start "$n"
   _cs_follow "$n"
 }
