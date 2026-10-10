@@ -33,11 +33,11 @@ _cs_usage() {
   cat <<'EOF'
 使い方:
   cloud-support ls                  演習環境の一覧
-  cloud-support create 02|08|10     演習環境を作る（08/10 は演習用の openstack 環境の構築まで）
-  cloud-support delete 02|06|08|10  演習環境を消す（消す前に確認する）
-  cloud-support check               演習外で作られたリソース（ゴミ）を報告する
+  cloud-support create 02|08|10     演習環境を構築(どの環境を作るかは講師から指示があります)
+  cloud-support delete 02|06|08|10  演習環境を消す
+  cloud-support check               演習外のリソースを報告する
   cloud-support log 08|10           構築のログを表示する
-  cloud-support update              cloud-support を最新にする
+  cloud-support update              cloud-support を最新にする(メンテナンス用)
 EOF
 }
 
