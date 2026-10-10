@@ -19,6 +19,18 @@ NII 研究クラウドのベアメタル上に、Rocky Linux 9 + OpenStack Epoxy
 | compute | N | `openstack-node1`, `openstack-node2`, ... |
 
 compute の台数は受講者数から決める。目安は 1 台あたり 10〜14 名で、受講者 50 名なら 5 台。
+そこに repo1台 + controller1台 + 予備1台 を加えた台数を払い出す。
+
+### 名前
+
+名前は構築に影響しないが、慣例的に以下で設定している。
+
+- cloud-repo 1台
+- cloud-openstack 残りはこれ。自動的に -1, -2 と採番される
+
+### イメージ
+
+- `Rocky9.8-20260710`
 
 ### フレーバー
 
@@ -31,7 +43,7 @@ compute の台数は受講者数から決める。目安は 1 台あたり 10〜
 
 ### ネットワーク
 
-（未記入）
+- `cloud-TOPSE-SMARTSE`
 
 Floating IP は受講者 1 名で 3 個使う。外部ネットワークの範囲には、受講者数 × 3 に講師・予備を足した数を確保する。
 
