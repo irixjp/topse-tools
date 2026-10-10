@@ -3,7 +3,7 @@
 # cloud-support: 演習環境の作成・一覧・削除と、演習外で作られたリソースの検出を行う。
 # console の ~/.bashrc から読み込む（00_console.yml が ~/.support/support.sh に置く）。
 #
-#   cloud-support ls                 演習環境の一覧
+#   cloud-support ls                 現在の演習環境の状態
 #   cloud-support create 02|08|10    演習環境を作る（08/10 は構築 playbook まで流す）
 #   cloud-support delete 02|06|08|10 演習環境を消す
 #   cloud-support check              演習外のリソース（ゴミ）と、06 のリソースの重複を報告する
@@ -32,7 +32,7 @@ _cs_build_msg() { case $1 in 08) echo 演習用のシングルノード openstac
 _cs_usage() {
   cat <<'EOF'
 使い方:
-  cloud-support ls                  演習環境の一覧
+  cloud-support ls                  現在の演習環境の状態
   cloud-support create 02|08|10     演習環境を構築(どの環境を作るかは講師から指示があります)
   cloud-support delete 02|06|08|10  演習環境を消す
   cloud-support check               演習外のリソースを報告する
