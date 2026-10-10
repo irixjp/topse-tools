@@ -155,7 +155,7 @@ _cs_create() {
   envs=$(_cs_envs "$dir")
   rm -rf "$dir"
   if [ -n "$envs" ]; then
-    echo "ほかの演習環境が残っているため作れません（console と演習環境 1 つまでしか作れません）:" >&2
+    echo "演習環境が残っているため作れません（console と演習環境 1 つまでしか作れません）:" >&2
     while IFS=$'\t' read -r f stack; do echo "  $f  $stack" >&2; done <<< "$envs"
     echo "cloud-support delete <番号> で消してから、もう一度実行してください。" >&2
     return 1

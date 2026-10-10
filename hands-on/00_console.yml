@@ -117,6 +117,19 @@ resources:
         echo "export LC_ALL=en_US.UTF-8" >> /home/${CLOUT_INIT_USER}/.bashrc
         echo "export LANG=en_US.UTF-8"   >> /home/${CLOUT_INIT_USER}/.bashrc
 
+        # 演習の支援ツール cloud-support。取得に失敗しても console の作成は続け、ログイン時に取り直す
+        mkdir -p /home/${CLOUT_INIT_USER}/.support
+        curl -fsS --max-time 30 -o /home/${CLOUT_INIT_USER}/.support/support.sh \
+          http://reposerver-centos7/hands-on/support.sh || rm -f /home/${CLOUT_INIT_USER}/.support/support.sh
+        chown -R ${CLOUT_INIT_USER}:${CLOUT_INIT_USER} /home/${CLOUT_INIT_USER}/.support
+        cat << 'EOF' >> /home/${CLOUT_INIT_USER}/.bashrc
+        if [ ! -f ~/.support/support.sh ]; then
+          mkdir -p ~/.support
+          curl -fsS --max-time 5 -o ~/.support/support.sh http://reposerver-centos7/hands-on/support.sh 2> /dev/null || rm -f ~/.support/support.sh
+        fi
+        [ -f ~/.support/support.sh ] && source ~/.support/support.sh
+        EOF
+
   config_prompt_console:
     type: OS::Heat::SoftwareConfig
     properties:
