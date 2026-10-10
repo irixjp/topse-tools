@@ -12,6 +12,8 @@
 
 CS_REPO_URL="${CS_REPO_URL:-http://reposerver-centos7/hands-on}"
 CS_DIR="${CS_DIR:-$HOME/.support}"
+# console と演習環境の VM が載る work-net（00_console.yml）
+CS_WORK_CIDR=192.168.199.0/24
 
 # 06 の正規のリソースの名前（06 は受講者が CLI で手で作る）
 CS_06_SERVER=openstack-single
@@ -181,6 +183,9 @@ _cs_create() {
     echo "cloud-support delete $n で消してから、もう一度実行してください。" >&2
     return 1
   fi
+  # 演習環境の VM は作り直しても同じ固定 IP で MAC だけが変わる。console の ARP キャッシュに
+  # 前の VM の MAC が残っていると、最初の接続が 15 秒ほど待たされるので消しておく
+  sudo -n ip neigh flush to "$CS_WORK_CIDR" > /dev/null 2>&1
   openstack stack output show "$stack" --all
   case $n in 08|10) ;; *) return 0 ;; esac
 

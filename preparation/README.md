@@ -263,4 +263,6 @@ openstack stack list       # console だけ
 
 `openstack stack delete --wait` の進み具合の表示は、最後の `Stack DELETE completed` が出る前に途切れることがある。削除の後は `openstack stack list` で、残っているのが console だけであることを確かめる。
 
+手でスタックを作り直したときは、作成の後に `sudo ip neigh flush to 192.168.199.0/24` を実行する。演習環境の VM は同じ固定 IP で MAC だけが変わるため、console の ARP キャッシュに前の VM の MAC が残り、最初の ssh や構築 playbook の接続が 15 秒ほど待たされる（`cloud-support create` は自動で行う）。
+
 `cloud-support` を直した版は、`cloud-support update` で repo サーバーから取り直す。
