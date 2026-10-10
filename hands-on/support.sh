@@ -78,7 +78,7 @@ _cs_fetch() {
         res-*)     openstack stack resource list -n 5 -f json "${kind#res-}" ;;
         rports-*)  openstack port list --router "${kind#rports-}" --long -f json ;;
         sports-*)  openstack port list --server "${kind#sports-}" -f json ;;
-        table-servers) openstack server list ;;
+        table-servers) openstack server list --max-width "${CS_TABLE_WIDTH:-0}" ;;
       esac > "$out" 2> "$dir/$kind.err" &
     done
     wait
@@ -136,11 +136,13 @@ _cs_envs() {
 }
 
 _cs_ls() {
-  local dir envs n desc label
+  local dir envs n desc label width=0
   _cs_auth || return 1
   dir=$(mktemp -d)
-  # 受講者が見慣れた openstack server list の表も出す（ほかの一覧と並列に取る）
-  _cs_fetch "$dir" stacks servers ports subnets networks keypairs table-servers || { rm -rf "$dir"; return 1; }
+  # 受講者が見慣れた openstack server list の表も出す（ほかの一覧と並列に取る）。
+  # 出力をファイルに取ると端末の幅が分からず表が折り返されないので、端末の幅を渡す
+  [ -t 1 ] && width=$(stty size < /dev/tty 2> /dev/null | cut -d' ' -f2)
+  CS_TABLE_WIDTH=${width:-0} _cs_fetch "$dir" stacks servers ports subnets networks keypairs table-servers || { rm -rf "$dir"; return 1; }
   envs=$(_cs_envs "$dir")
   if [ -z "$envs" ]; then
     echo "演習環境はありません（console だけです）"
