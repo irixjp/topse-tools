@@ -71,7 +71,7 @@ vi inventory/production/hosts.yml            # ansible_host（ssh config の Hos
 vi inventory/production/group_vars/all.yml   # 外部 NIC、外部ネットワーク、Floating IP の範囲、HDD のマウント先
 ```
 
-母艦 OpenStack の構築（約 1 時間 45 分）
+母艦 OpenStack の構築（約 2 時間）
 ------------
 
 ```bash
@@ -93,7 +93,7 @@ uv run ansible-playbook site.yml                  # 01〜06・11 を順に実行
 
 構築が完了した後は、母艦 OpenStack の設定ファイルやサービスを変更しない。
 
-演習用のイメージとテナントの準備
+演習用のイメージとテナントの準備（約 45 分）
 ------------
 
 ```bash
@@ -122,10 +122,12 @@ uv run ansible-playbook site_run_test.yml   # 31〜39 を順に実行する
 |---|---|---|
 | `00_console.yml` | 作業用ネットワーク `work-net`（192.168.199.0/24）、ルーター `Ext-Router`、作業用の console サーバー（Rocky 9、Floating IP 付き） | 1〜2 分 |
 | `02_vm_vnet_vstr.yml` | 仮想化の演習用の `handson02-virt`（CentOS 7、KVM）と、ネットワーク・ストレージの演習用の `handson02-vnet`（CentOS 7、Floating IP 付き） | 1〜2 分 |
-| `08_openstack_single.yml` | 入れ子の OpenStack（all-in-one）用の `handson08-openstack-single`（CentOS 7） | スタック 1 分、playbook 約 10 分 |
-| `10_openstack_multi.yml` | 入れ子の OpenStack（cc 1 台 + compute 2 台）用の `handson10-openstack-{cc,node1,node2}`（CentOS 7） | スタック 1〜2 分、playbook 約 12 分 |
+| `08_openstack_single.yml` | 入れ子の OpenStack（all-in-one）用の `handson08-openstack-single`（CentOS 7） | スタック 1 分、playbook 約 10 分、テスト用 playbook 約 2 分 |
+| `10_openstack_multi.yml` | 入れ子の OpenStack（cc 1 台 + compute 2 台）用の `handson10-openstack-{cc,node1,node2}`（CentOS 7） | スタック 1〜2 分、playbook 約 12 分、テスト用 playbook 約 2 分 |
 
 1 名のクォータ（インスタンス 5、RAM 40GB、Floating IP 2）に収まるのは、console と、ほかの演習環境 1 つまで。次の演習環境を作る前に、前のスタックを削除する。
+
+`openstack stack delete --wait` の進み具合の表示は、最後の `Stack DELETE completed` が出る前に途切れることがある。削除の後は `openstack stack list` で、残っているのが console だけであることを確かめる。
 
 ### 1. console の作成（Horizon）
 
@@ -153,7 +155,7 @@ openstack token issue      # 認証が通ること
 openstack stack list       # console のスタックが CREATE_COMPLETE
 ```
 
-ログインしたシェルでは、プロンプトの先頭に `[CONSOLE]` が出て、`~/openrc` が読み込まれ、`LC_ALL=en_US.UTF-8` が設定されている。
+ログインしたシェルでは、プロンプトの先頭に `[CONSOLE]` が出て（root では末尾が `#`）、`~/openrc` が読み込まれ、`LC_ALL=en_US.UTF-8` が設定されている。
 
 以降の作業はすべて console で行う。console は演習の期間中は削除しない。
 
@@ -192,6 +194,7 @@ ssh centos@192.168.199.11    # プロンプト [VNET]。target・iscsid・httpd 
 
 ```bash
 openstack stack delete -y --wait handson02
+openstack stack list      # console だけ
 ```
 
 ### 4. 08: 入れ子の OpenStack（all-in-one）
@@ -215,17 +218,19 @@ ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_test_p
 
 ```bash
 openstack stack delete -y --wait handson08
+openstack stack list      # console だけ
 ```
 
 ### 5. 10: 入れ子の OpenStack（複数ノード）
 
-08 と同じ流れで、cc 1 台と compute 2 台の入れ子の OpenStack を作る。テスト用 playbook は VM 2 台を別々の compute に置き、compute をまたいだ通信（VXLAN）も確かめる。
+08 と同じ流れで、cc 1 台と compute 2 台の入れ子の OpenStack を作る。テスト用 playbook は VM 2 台を別々の compute に置き、compute をまたいだ通信（VXLAN）も確かめる。各 playbook の `PLAY RECAP` で、全ホストが `failed=0` であること。
 
 ```bash
 openstack stack create -t 10_openstack_multi.yml --wait handson10
 ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_playbook.yml
 ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_test_playbook.yml
 openstack stack delete -y --wait handson10
+openstack stack list      # console だけ
 ```
 
 ### 6. 後片付け
