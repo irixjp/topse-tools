@@ -55,12 +55,13 @@ _cs_confirm() {
   [ "$ans" = y ] || [ "$ans" = Y ]
 }
 
-# 一覧を DIR/<種類>.json に並列で取得する
+# 一覧を DIR/<種類>.json に並列で取得する（table-* は表の形で DIR/<種類>.txt に）
 _cs_fetch() {
-  local dir=$1 kind
+  local dir=$1 kind out
   shift
   (
     for kind in "$@"; do
+      case $kind in table-*) out="$dir/$kind.txt" ;; *) out="$dir/$kind.json" ;; esac
       case $kind in
         stacks)    openstack stack list -f json ;;
         servers)   openstack server list -f json ;;
@@ -77,11 +78,13 @@ _cs_fetch() {
         res-*)     openstack stack resource list -n 5 -f json "${kind#res-}" ;;
         rports-*)  openstack port list --router "${kind#rports-}" --long -f json ;;
         sports-*)  openstack port list --server "${kind#sports-}" -f json ;;
-      esac > "$dir/$kind.json" 2> "$dir/$kind.err" &
+        table-servers) openstack server list ;;
+      esac > "$out" 2> "$dir/$kind.err" &
     done
     wait
   )
   for kind in "$@"; do
+    case $kind in table-*) continue ;; esac   # 表示用。失敗しても表示するだけ（cat で .err も出す）
     if ! jq -e 'type == "array"' "$dir/$kind.json" > /dev/null 2>&1; then
       echo "一覧の取得に失敗しました（$kind）:" >&2
       cat "$dir/$kind.err" >&2
@@ -136,19 +139,23 @@ _cs_ls() {
   local dir envs n desc label
   _cs_auth || return 1
   dir=$(mktemp -d)
-  _cs_fetch "$dir" stacks servers ports subnets networks keypairs || { rm -rf "$dir"; return 1; }
+  # 受講者が見慣れた openstack server list の表も出す（ほかの一覧と並列に取る）
+  _cs_fetch "$dir" stacks servers ports subnets networks keypairs table-servers || { rm -rf "$dir"; return 1; }
   envs=$(_cs_envs "$dir")
-  rm -rf "$dir"
   if [ -z "$envs" ]; then
     echo "演習環境はありません（console だけです）"
-    return 0
+  else
+    echo "演習環境:"
+    while IFS=$'\t' read -r n desc; do
+      label=""
+      case $n in 08|10) label=$(_cs_build_label "$n") ;; esac
+      echo "  $n  $desc${label:+  $label}"
+    done <<< "$envs"
   fi
-  echo "演習環境:"
-  while IFS=$'\t' read -r n desc; do
-    label=""
-    case $n in 08|10) label=$(_cs_build_label "$n") ;; esac
-    echo "  $n  $desc${label:+  $label}"
-  done <<< "$envs"
+  echo
+  echo "VM（openstack server list）:"
+  cat "$dir/table-servers.txt" "$dir/table-servers.err"
+  rm -rf "$dir"
 }
 
 _cs_create() {
