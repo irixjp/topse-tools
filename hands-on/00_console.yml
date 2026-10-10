@@ -122,7 +122,7 @@ resources:
     properties:
       config: |
         #!/bin/bash -ex
-        cat << EOF > /etc/profile.d/prompt.sh
+        cat << 'EOF' > /etc/profile.d/prompt.sh
         export PS1='\[\e[1;30;43m\][CONSOLE]\[\e[0m\] \u@\h \W\$ '
         EOF
 

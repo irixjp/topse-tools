@@ -112,7 +112,7 @@ resources:
     properties:
       config: |
         #!/bin/bash -ex
-        cat << EOF > /etc/profile.d/prompt.sh
+        cat << 'EOF' > /etc/profile.d/prompt.sh
         export PS1='\[\e[1;36m\][VIRT]\[\e[0m\] \u@\h \W\$ '
         EOF
 
@@ -121,7 +121,7 @@ resources:
     properties:
       config: |
         #!/bin/bash -ex
-        cat << EOF > /etc/profile.d/prompt.sh
+        cat << 'EOF' > /etc/profile.d/prompt.sh
         export PS1='\[\e[1;36m\][VNET]\[\e[0m\] \u@\h \W\$ '
         EOF
 
