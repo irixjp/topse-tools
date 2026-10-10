@@ -116,7 +116,7 @@ uv run ansible-playbook site_run_test.yml   # 31〜39 を順に実行する
 
 受講者と同じ手順で演習環境を作り、母艦の上で演習が動くことを確かめる。講師の確認には `student-00000` を使う。
 
-受講者は、repo サーバーの `http://<repo サーバー>/hands-on/` から heat テンプレートと playbook を取得する（このリポジトリの [hands-on/](../hands-on/)）。
+受講者は、console に用意される `cloud-support` コマンドで演習環境を作り、消す。`cloud-support` は repo サーバーの `http://<repo サーバー>/hands-on/` から heat テンプレートと playbook を取得して使う（このリポジトリの [hands-on/](../hands-on/)）。
 
 | テンプレート | 作るもの | 所要時間の目安 |
 |---|---|---|
@@ -125,9 +125,7 @@ uv run ansible-playbook site_run_test.yml   # 31〜39 を順に実行する
 | `08_openstack_single.yml` | 入れ子の OpenStack（all-in-one）用の `handson08-openstack-single`（CentOS 7） | スタック 1 分、playbook 約 10 分、テスト用 playbook 約 2 分 |
 | `10_openstack_multi.yml` | 入れ子の OpenStack（cc 1 台 + compute 2 台）用の `handson10-openstack-{cc,node1,node2}`（CentOS 7） | スタック 1〜2 分、playbook 約 12 分、テスト用 playbook 約 2 分 |
 
-1 名のクォータ（インスタンス 5、RAM 40GB、Floating IP 2）に収まるのは、console と、ほかの演習環境 1 つまで。次の演習環境を作る前に、前のスタックを削除する。
-
-`openstack stack delete --wait` の進み具合の表示は、最後の `Stack DELETE completed` が出る前に途切れることがある。削除の後は `openstack stack list` で、残っているのが console だけであることを確かめる。
+1 名のクォータ（インスタンス 5、RAM 40GB、Floating IP 2）に収まるのは、console と、ほかの演習環境 1 つまで。`cloud-support create` は、演習環境が残っていると作成を拒否する。
 
 ### 1. console の作成（Horizon）
 
@@ -155,32 +153,22 @@ openstack token issue      # 認証が通ること
 openstack stack list       # console のスタックが CREATE_COMPLETE
 ```
 
-ログインしたシェルでは、プロンプトの先頭に `[CONSOLE]` が出て（root では末尾が `#`）、`~/openrc` が読み込まれ、`LC_ALL=en_US.UTF-8` が設定されている。
+ログインしたシェルでは、プロンプトの先頭に `[CONSOLE]` が出て（root では末尾が `#`）、`~/openrc` が読み込まれ、`LC_ALL=en_US.UTF-8` が設定され、`cloud-support` が使える（`~/.support/support.sh`）。
+
+```bash
+cloud-support              # 使い方
+cloud-support ls           # 演習環境はありません（console だけです）
+```
+
+`cloud-support` がない（`command not found`）ときは、cloud-init で repo サーバーから取得できなかった。ログインし直すと取り直す。
 
 以降の作業はすべて console で行う。console は演習の期間中は削除しない。
 
-### 2. 演習の資材の取得
-
-console は repo サーバーを `reposerver-centos7` の名前で引ける。
+### 2. 02: 仮想化・仮想ネットワーク・仮想ストレージの演習環境
 
 ```bash
-cd ~
-for f in 02_vm_vnet_vstr.yml \
-         08_openstack_single.yml 08_openstack_single_inventory.yml \
-         08_openstack_single_playbook.yml 08_openstack_single_test_playbook.yml \
-         10_openstack_multi.yml 10_openstack_multi_inventory \
-         10_openstack_multi_playbook.yml 10_openstack_multi_test_playbook.yml; do
-  curl -fsSO http://reposerver-centos7/hands-on/$f
-done
-ls
-```
-
-### 3. 02: 仮想化・仮想ネットワーク・仮想ストレージの演習環境
-
-```bash
-openstack stack create -t 02_vm_vnet_vstr.yml --wait handson02
-openstack stack output show handson02 --all
-openstack server list
+cloud-support create 02    # スタック handson02 を作り、outputs を表示する
+cloud-support ls           # 02  スタック handson02（CREATE_COMPLETE）
 ```
 
 `handson02-virt`（192.168.199.10）と `handson02-vnet`（192.168.199.11）に、console から `centos` / `password` でログインできることを確かめる。
@@ -190,49 +178,89 @@ ssh centos@192.168.199.10    # プロンプト [VIRT]。libvirtd が動き、/de
 ssh centos@192.168.199.11    # プロンプト [VNET]。target・iscsid・httpd が動いている
 ```
 
-確かめたら削除する。
+確かめたら削除する。消す対象が表示されるので、`y` で消す。
 
 ```bash
-openstack stack delete -y --wait handson02
-openstack stack list      # console だけ
+cloud-support delete 02
+cloud-support ls           # 演習環境はありません
 ```
 
-### 4. 08: 入れ子の OpenStack（all-in-one）
+### 3. 08: 入れ子の OpenStack（all-in-one）
 
-スタックを作り、playbook で入れ子の OpenStack（Newton）を Packstack で構築する。
+スタックを作り、続けて構築 playbook で入れ子の OpenStack（Newton）を Packstack で構築する。構築のログが流れ、最後に「構築完了」か「構築失敗」が出る。
 
 ```bash
-openstack stack create -t 08_openstack_single.yml --wait handson08
-ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_playbook.yml
+cloud-support create 08
 ```
 
-テスト用 playbook で、入れ子の OpenStack の上に cirros の VM 2 台を作り、VM 間の通信と Floating IP での ping・ssh を確かめる。最後の `PLAY RECAP` で `failed=0` であること。
+構築は端末から切り離して動くので、Ctrl-C で表示を止めても、SSH が切れても止まらない。再接続したら、状態を `ls` で確かめ、ログを `log` で表示する（構築中なら終わるまで追従する）。ログは `~/.support/logs/08-<日時>.log` に残る。
 
 ```bash
+cloud-support ls           # 08  スタック handson08（CREATE_COMPLETE）  構築中 / 構築完了 / 構築失敗
+cloud-support log 08
+```
+
+テスト用 playbook は `cloud-support` では流さない。講師の確認では手で流し、入れ子の OpenStack の上に cirros の VM 2 台を作り、VM 間の通信と Floating IP での ping・ssh を確かめる。最後の `PLAY RECAP` で `failed=0` であること。
+
+```bash
+cd ~/.support/08
+curl -fsSO http://reposerver-centos7/hands-on/08_openstack_single_test_playbook.yml
 ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_test_playbook.yml
+cd ~
 ```
-
-テスト用のリソース（cirros の VM、ネットワーク等）は入れ子の OpenStack に残る。スタックを残したまま消すときは `-e cleanup=true` を付けて再実行する。
 
 確かめたら削除する。
 
 ```bash
-openstack stack delete -y --wait handson08
-openstack stack list      # console だけ
+cloud-support delete 08
 ```
 
-### 5. 10: 入れ子の OpenStack（複数ノード）
+### 4. 10: 入れ子の OpenStack（複数ノード）
 
 08 と同じ流れで、cc 1 台と compute 2 台の入れ子の OpenStack を作る。テスト用 playbook は VM 2 台を別々の compute に置き、compute をまたいだ通信（VXLAN）も確かめる。各 playbook の `PLAY RECAP` で、全ホストが `failed=0` であること。
 
 ```bash
-openstack stack create -t 10_openstack_multi.yml --wait handson10
-ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_playbook.yml
+cloud-support create 10
+cd ~/.support/10
+curl -fsSO http://reposerver-centos7/hands-on/10_openstack_multi_test_playbook.yml
 ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_test_playbook.yml
-openstack stack delete -y --wait handson10
-openstack stack list      # console だけ
+cd ~
+cloud-support delete 10
 ```
+
+### 5. 06 の後片付けと、演習外のリソースの確認
+
+06 は、受講者が CLI でネットワーク・サブネット・ポート・キーペア・サーバーを手で作る演習である。`cloud-support delete 06` は、06 の手順どおりの名前のリソース（`openstack-single`、`handson06-cc-eth0`・`-eth1`、`handson06-subnet` とルーターとの接続、`handson06-net`、`handson06-key`）だけを消す。
+
+`cloud-support check` は、console と演習環境のスタック、06 の手順どおりの名前のリソース以外のもの（名前を打ち間違えたもの、作りかけのもの）と、06 の名前のリソースの重複を報告し、消すためのコマンドを出す。演習が進まなくなった受講者は、まずこれを実行する。
+
+```bash
+cloud-support check        # 演習外のリソースは見つかりませんでした
+```
+
+判定の詳細: [support.sh の仕様](../docs/specifications/shell/support-sh.md)（topse-tools にはない。このリポジトリの `docs/`）
 
 ### 6. 後片付け
 
-講師の確認が終わったら、Horizon の「スタック」で console のスタックを削除し、スタックが残っていないことを確かめる。
+講師の確認が終わったら、`cloud-support check` で何も残っていないことを確かめてから、Horizon の「スタック」で console のスタックを削除し、スタックが残っていないことを確かめる。
+
+### cloud-support が使えないとき
+
+repo サーバーや `cloud-support` に不具合があるときは、手で同じことをする。資材を取得し、スタックを作り、08/10 は構築 playbook を流す。
+
+```bash
+cd ~
+for f in 02_vm_vnet_vstr.yml \
+         08_openstack_single.yml 08_openstack_single_inventory.yml 08_openstack_single_playbook.yml \
+         10_openstack_multi.yml 10_openstack_multi_inventory 10_openstack_multi_playbook.yml; do
+  curl -fsSO http://reposerver-centos7/hands-on/$f
+done
+openstack stack create -t 08_openstack_single.yml --wait handson08
+ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_playbook.yml
+openstack stack delete -y --wait handson08
+openstack stack list       # console だけ
+```
+
+`openstack stack delete --wait` の進み具合の表示は、最後の `Stack DELETE completed` が出る前に途切れることがある。削除の後は `openstack stack list` で、残っているのが console だけであることを確かめる。
+
+`cloud-support` を直した版は、`cloud-support update` で repo サーバーから取り直す。
