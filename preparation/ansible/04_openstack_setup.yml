@@ -264,3 +264,26 @@
       ansible.builtin.systemd:
         daemon_reload: true
       when: mariadb_dropin.changed or cinder_backup_dropin.changed
+
+# neutron 26（Epoxy）の既定ポリシーは、ポートの binding:profile の更新に service ロールを要求する（update_port:binding:profile = rule:service_api）。
+# nova はこの更新を [neutron] の認証ユーザー neutron（project services）で行うが、packstack は neutron に admin しか付けない。
+# そのため、自分で作ったポートを付けた VM の削除で unbind が 403 になり、ポートに device_id・binding:host_id が残る。
+# packstack が nova・cinder に付けているのと同じ service ロールを neutron にも付ける（TASK-020）。
+# 未テスト（稼働中の環境ではコマンドを手で実行して確認済み）。04 でうまくいかない場合は 11 に移す
+- name: Grant the service role to the neutron service user
+  hosts: controller
+  tasks:
+    # 前の play の httpd の再起動で keystone が応答するまで待つため、retries を付ける
+    - name: Add service role to neutron in the services project
+      ansible.builtin.shell: |
+        source /root/keystonerc_admin
+        if openstack role assignment list --project services --user neutron --role service -f value -c Role | grep -q .; then
+          echo EXISTS
+        else
+          openstack role add --project services --user neutron service
+        fi
+      register: neutron_service_role
+      changed_when: "'EXISTS' not in neutron_service_role.stdout"
+      retries: 6
+      delay: 10
+      until: neutron_service_role.rc == 0
