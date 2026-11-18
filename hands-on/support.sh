@@ -1,12 +1,12 @@
 # shellcheck shell=bash
 #
-# cloud-support: 演習環境の作成・一覧・削除と、演習外で作られたリソースの検出を行う。
+# cloud-support: 演習環境の作成・一覧・削除と、console と演習環境のスタックに含まれないリソースの検出を行う。
 # console の ~/.bashrc から読み込む（00_console.yml が ~/.support/support.sh に置く）。
 #
 #   cloud-support ls                 現在の演習環境の状態
 #   cloud-support create 02|08|10    演習環境を作る（08/10 は構築 playbook まで流す）
-#   cloud-support delete 02|06|08|10 演習環境を消す
-#   cloud-support check              演習外のリソース（ゴミ）と、06 のリソースの重複を報告する
+#   cloud-support delete 02|08|10    演習環境を消す
+#   cloud-support check              console と演習環境のスタックに含まれないリソースを報告する
 #   cloud-support log 08|10          構築 playbook のログを表示する
 #   cloud-support update             support.sh を repo サーバーから取り直す
 
@@ -14,13 +14,6 @@ CS_REPO_URL="${CS_REPO_URL:-http://reposerver-centos7/hands-on}"
 CS_DIR="${CS_DIR:-$HOME/.support}"
 # console と演習環境の VM が載る work-net（00_console.yml）
 CS_WORK_CIDR=192.168.199.0/24
-
-# 06 の正規のリソースの名前（06 は受講者が CLI で手で作る）
-CS_06_SERVER=openstack-single
-CS_06_PORTS="handson06-cc-eth0 handson06-cc-eth1"
-CS_06_SUBNET=handson06-subnet
-CS_06_NET=handson06-net
-CS_06_KEY=handson06-key
 
 _cs_template()  { case $1 in 02) echo 02_vm_vnet_vstr.yml ;; 08) echo 08_openstack_single.yml ;; 10) echo 10_openstack_multi.yml ;; esac; }
 _cs_inventory() { case $1 in 08) echo 08_openstack_single_inventory.yml ;; 10) echo 10_openstack_multi_inventory ;; esac; }
@@ -34,8 +27,8 @@ _cs_usage() {
 使い方:
   cloud-support ls                  現在の演習環境の状態
   cloud-support create 02|08|10     演習環境を構築(どの環境を作るかは講師から指示があります)
-  cloud-support delete 02|06|08|10  演習環境を消す
-  cloud-support check               演習外のリソースを報告する
+  cloud-support delete 02|08|10     演習環境を消す
+  cloud-support check               console と演習環境のスタックに含まれないリソースを報告する
   cloud-support log 08|10           構築のログを表示する
   cloud-support update              cloud-support を最新にする(メンテナンス用)
 EOF
@@ -115,24 +108,12 @@ _cs_build_label() {
   esac
 }
 
-# 06 の正規の名前のリソースを「種類<TAB>名前<TAB>ID」で出力する（DIR に servers ports subnets networks keypairs が必要）
-_cs_06_resources() {
-  local dir=$1
-  jq -r --arg n "$CS_06_SERVER" '.[] | select(.Name == $n) | "server\t\(.Name)\t\(.ID)"' "$dir/servers.json"
-  jq -r --arg n "$CS_06_PORTS" '.[] | select(.Name as $x | $n | split(" ") | index($x)) | "port\t\(.Name)\t\(.ID)"' "$dir/ports.json"
-  jq -r --arg n "$CS_06_SUBNET" --arg p "$CS_PROJECT" '.[] | select(.Name == $n and .Project == $p) | "subnet\t\(.Name)\t\(.ID)"' "$dir/subnets.json"
-  jq -r --arg n "$CS_06_NET" --arg p "$CS_PROJECT" '.[] | select(.Name == $n and .Project == $p) | "network\t\(.Name)\t\(.ID)"' "$dir/networks.json"
-  jq -r --arg n "$CS_06_KEY" '.[] | select(.Name == $n) | "keypair\t\(.Name)\t\(.Name)"' "$dir/keypairs.json"
-}
-
-# 存在する演習環境を「番号<TAB>説明」で出力する
+# 存在する演習環境を「番号<TAB>説明」で出力する（DIR に stacks が必要）
 _cs_envs() {
-  local dir=$1 n names
+  local dir=$1 n
   for n in 02 08 10; do
     jq -r --arg s "handson$n" --arg n "$n" '.[] | select(."Stack Name" == $s) | "\($n)\tスタック \($s)（\(."Stack Status")）"' "$dir/stacks.json"
   done
-  names=$(_cs_06_resources "$dir" | cut -f2 | sort -u | paste -sd ' ')
-  [ -n "$names" ] && printf '06\t手で作ったリソース（%s）\n' "$names"
 }
 
 _cs_ls() {
@@ -142,7 +123,7 @@ _cs_ls() {
   # 受講者が見慣れた openstack server list の表も出す（ほかの一覧と並列に取る）。
   # 出力をファイルに取ると端末の幅が分からず表が折り返されないので、端末の幅を渡す
   [ -t 1 ] && width=$(stty size < /dev/tty 2> /dev/null | cut -d' ' -f2)
-  CS_TABLE_WIDTH=${width:-0} _cs_fetch "$dir" stacks servers ports subnets networks keypairs table-servers || { rm -rf "$dir"; return 1; }
+  CS_TABLE_WIDTH=${width:-0} _cs_fetch "$dir" stacks table-servers || { rm -rf "$dir"; return 1; }
   envs=$(_cs_envs "$dir")
   if [ -z "$envs" ]; then
     echo "演習環境はありません（console だけです）"
@@ -165,7 +146,7 @@ _cs_create() {
   case $n in 02|08|10) ;; *) echo "作れる演習環境は 02、08、10 です" >&2; return 1 ;; esac
   _cs_auth || return 1
   dir=$(mktemp -d)
-  _cs_fetch "$dir" stacks servers ports subnets networks keypairs || { rm -rf "$dir"; return 1; }
+  _cs_fetch "$dir" stacks || { rm -rf "$dir"; return 1; }
   envs=$(_cs_envs "$dir")
   rm -rf "$dir"
   if [ -n "$envs" ]; then
@@ -256,12 +237,12 @@ _cs_log() {
 _cs_delete() {
   local n=$1 dir envs desc
   case $n in
-    02|06|08|10) ;;
+    02|08|10) ;;
     *)
-      echo "消す演習環境の番号を指定してください: cloud-support delete 02|06|08|10" >&2
+      echo "消す演習環境の番号を指定してください: cloud-support delete 02|08|10" >&2
       _cs_auth || return 1
       dir=$(mktemp -d)
-      _cs_fetch "$dir" stacks servers ports subnets networks keypairs && envs=$(_cs_envs "$dir")
+      _cs_fetch "$dir" stacks && envs=$(_cs_envs "$dir")
       rm -rf "$dir"
       if [ -n "$envs" ]; then
         echo "いまある演習環境:" >&2
@@ -272,7 +253,7 @@ _cs_delete() {
       return 1 ;;
   esac
   _cs_auth || return 1
-  if [ "$n" = 06 ]; then _cs_delete_06; else _cs_delete_stack "$n"; fi
+  _cs_delete_stack "$n"
 }
 
 _cs_delete_stack() {
@@ -310,55 +291,8 @@ _cs_delete_stack() {
   return 1
 }
 
-_cs_delete_06() {
-  local dir res sid rid err=0 type name id
-  dir=$(mktemp -d)
-  _cs_fetch "$dir" servers ports subnets networks keypairs || { rm -rf "$dir"; return 1; }
-  res=$(_cs_06_resources "$dir")
-  rm -rf "$dir"
-  if [ -z "$res" ] && [ ! -e "$HOME/$CS_06_KEY.pem" ]; then
-    echo "06 のリソースはありません"
-    return 0
-  fi
-  echo "消すもの:"
-  while IFS=$'\t' read -r type name id; do
-    [ -n "$type" ] && printf '  %-8s %-20s %s\n' "$type" "$name" "$id"
-  done <<< "$res"
-  [ -e "$HOME/$CS_06_KEY.pem" ] && echo "  file     ~/$CS_06_KEY.pem"
-  _cs_confirm "削除しますか?" || { echo "中止しました"; return 1; }
-
-  # 消す順序: サーバー → ポート → ルーターからサブネットを外す → サブネット → ネットワーク → キーペア
-  for id in $(awk -F'\t' '$1 == "server" { print $3 }' <<< "$res"); do
-    openstack server delete --wait "$id" || err=1
-  done
-  for id in $(awk -F'\t' '$1 == "port" { print $3 }' <<< "$res"); do
-    openstack port delete "$id" || err=1
-  done
-  for sid in $(awk -F'\t' '$1 == "subnet" { print $3 }' <<< "$res"); do
-    for id in $(openstack port list --fixed-ip subnet="$sid" --device-owner network:router_interface -f value -c ID); do
-      rid=$(openstack port show "$id" -f value -c device_id)
-      openstack router remove subnet "$rid" "$sid" || err=1
-    done
-    openstack subnet delete "$sid" || err=1
-  done
-  for id in $(awk -F'\t' '$1 == "network" { print $3 }' <<< "$res"); do
-    openstack network delete "$id" || err=1
-  done
-  if grep -q '^keypair' <<< "$res"; then
-    openstack keypair delete "$CS_06_KEY" || err=1
-  fi
-  rm -f "$HOME/$CS_06_KEY.pem"
-
-  if [ "$err" = 0 ]; then
-    echo "06 のリソースを削除しました"
-  else
-    echo "一部を削除できませんでした。cloud-support check で、残っているものを確かめてください。" >&2
-    return 1
-  fi
-}
-
 _cs_check() {
-  local dir s legit_stacks other_stacks r f out cmds dup
+  local dir s legit_stacks other_stacks r f out cmds
   _cs_auth || return 1
   dir=$(mktemp -d)
   _cs_fetch "$dir" stacks servers ports networks subnets routers fips sgs keypairs volumes snapshots images \
@@ -386,7 +320,6 @@ _cs_check() {
 
   out=$(jq -r -n \
     --arg p "$CS_PROJECT" \
-    --arg sv "$CS_06_SERVER" --arg pt "$CS_06_PORTS" --arg sn "$CS_06_SUBNET" --arg nt "$CS_06_NET" --arg kp "$CS_06_KEY" \
     --slurpfile cov "$dir/covered.json" --slurpfile rifs "$dir/rifs.json" --slurpfile sports "$dir/sports.json" \
     --slurpfile stacks "$dir/stacks.json" --slurpfile servers "$dir/servers.json" --slurpfile ports "$dir/ports.json" \
     --slurpfile networks "$dir/networks.json" --slurpfile subnets "$dir/subnets.json" --slurpfile routers "$dir/routers.json" \
@@ -396,9 +329,9 @@ _cs_check() {
     | def notcov: (.ID as $i | $cov | index($i)) == null;
       def g(t; n): "G\t\(t)\t\(n)\t\(.ID)";
       def c(o; cmd): "C\t\(o)\t\(cmd)";
-      ([$servers[0][] | select(notcov and .Name != $sv)]) as $gsv
+      ([$servers[0][] | select(notcov)]) as $gsv
     | ([$routers[0][] | select(.Project == $p and notcov)]) as $grt
-    | ([$subnets[0][] | select(.Project == $p and notcov and .Name != $sn)]) as $gsn
+    | ([$subnets[0][] | select(.Project == $p and notcov)]) as $gsn
     | ([$subnets[0][] | select(.Project == $p) | .ID]) as $mysn
     | ([$gsn[].ID]) as $gsnid | ([$grt[].ID]) as $grtid | ([$gsv[].ID]) as $gsvid
     | ($gsv[] | g("server"; .Name), c(1; "openstack server delete --wait \(.ID)")),
@@ -408,46 +341,34 @@ _cs_check() {
       ($rifs[0][] | select((.[0] as $r | $grtid | index($r)) != null or (.[1] as $s | $gsnid | index($s)) != null)
         | select(.[1] as $s | $mysn | index($s)) | c(3; "openstack router remove subnet \(.[0]) \(.[1])")),
       ($ports[0][] | select((."Device Owner" | startswith("network:")) | not)
-        | select(notcov and (.Name as $n | $pt | split(" ") | index($n)) == null)
+        | select(notcov)
         | ($sports[0][.ID]) as $owner
         | if $owner != null and ($gsvid | index($owner)) != null
-          then "G\tport\t\(if .Name == "" then "-" else .Name end)\t\(.ID)\t（演習外のサーバーに接続。サーバーを消すと一緒に消えることがある）"
+          then "G\tport\t\(if .Name == "" then "-" else .Name end)\t\(.ID)\t（この一覧のサーバーに接続。サーバーを消すと一緒に消えることがある）"
           else g("port"; if .Name == "" then "-" else .Name end), c(4; "openstack port delete \(.ID)") end),
       ($grt[] | g("router"; .Name), c(5; "openstack router delete \(.ID)")),
       ($gsn[] | g("subnet"; .Name), c(6; "openstack subnet delete \(.ID)")),
-      ($networks[0][] | select(.Project == $p and notcov and .Name != $nt)
+      ($networks[0][] | select(.Project == $p and notcov)
         | g("network"; .Name), c(7; "openstack network delete \(.ID)")),
       ($sgs[0][] | select(.Project == $p and notcov and .Name != "default")
         | g("security group"; .Name), c(8; "openstack security group delete \(.ID)")),
-      ($keypairs[0][] | select(.Name != $kp) | "G\tkeypair\t\(.Name)\t\(.Name)", c(8; "openstack keypair delete \(.Name)")),
+      ($keypairs[0][] | "G\tkeypair\t\(.Name)\t\(.Name)", c(8; "openstack keypair delete \(.Name)")),
       ($snapshots[0][] | select(notcov) | g("volume snapshot"; .Name), c(9; "openstack volume snapshot delete \(.ID)")),
       ($volumes[0][] | select(notcov) | g("volume"; .Name), c(10; "openstack volume delete \(.ID)")),
-      ($images[0][] | select(notcov) | g("image"; .Name), c(11; "openstack image delete \(.ID)")),
-      # 06 の正規の名前のリソースの重複
-      ([$servers[0][] | select(.Name == $sv)], [$subnets[0][] | select(.Project == $p and .Name == $sn)],
-       [$networks[0][] | select(.Project == $p and .Name == $nt)],
-       ($pt | split(" ")[] as $n | [$ports[0][] | select(.Name == $n)])
-        | select(length > 1) | "D\t\(.[0].Name)\t\(length)\t\([.[].ID] | join(" "))")
+      ($images[0][] | select(notcov) | g("image"; .Name), c(11; "openstack image delete \(.ID)"))
     ')
   rm -rf "$dir"
 
-  echo "正規のリソース: スタック $(echo "$legit_stacks" | paste -sd ' ')、06 の $CS_06_SERVER / $CS_06_NET / $CS_06_SUBNET / $(echo "$CS_06_PORTS" | sed 's/ / \/ /') / $CS_06_KEY"
+  echo "正規のリソース: スタック $(echo "$legit_stacks" | paste -sd ' ')"
   if [ -z "$out" ]; then
-    echo "演習外のリソースは見つかりませんでした"
+    echo "console と演習環境のスタックに含まれないリソースは見つかりませんでした"
     return 0
   fi
   if grep -q '^G' <<< "$out"; then
     echo
-    echo "演習外のリソース（演習の手順にない名前で作られたもの）:"
+    echo "console と演習環境（02・08・10）のスタックに含まれないリソース（各回の演習で作ったもの、作りかけのものなど）:"
     grep '^G' <<< "$out" | awk -F'\t' '{ printf "  %-16s %-28s %s%s\n", $2, $3, $4, ($5 == "" ? "" : "  " $5) }'
     [ -n "$other_stacks" ] && echo "  （スタックのリソースは、スタックを消すと一緒に消えます）"
-  fi
-  dup=$(grep '^D' <<< "$out")
-  if [ -n "$dup" ]; then
-    echo
-    echo "重複（06 の名前のリソースが複数あります）:"
-    awk -F'\t' '{ printf "  %s が %s 個: %s\n", $2, $3, $4 }' <<< "$dup"
-    echo "  不要なものを ID で消すか、cloud-support delete 06 で 06 のリソースをすべて消して作り直してください。"
   fi
   cmds=$(grep '^C' <<< "$out" | sort -t$'\t' -k2,2n -s | cut -f3)
   if [ -n "$cmds" ]; then
