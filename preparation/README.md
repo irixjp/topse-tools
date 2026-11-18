@@ -118,12 +118,12 @@ uv run ansible-playbook site_run_test.yml   # 31〜39 を順に実行する
 
 受講者は、console に用意される `cloud-support` コマンドで演習環境を作り、消す。`cloud-support` は repo サーバーの `http://<repo サーバー>/hands-on/` から heat テンプレートと playbook を取得して使う（このリポジトリの [hands-on/](../hands-on/)）。
 
-| テンプレート | 作るもの | 所要時間の目安 |
-|---|---|---|
-| `00_console.yml` | 作業用ネットワーク `work-net`（192.168.199.0/24）、ルーター `Ext-Router`、作業用の console サーバー（Rocky 9、Floating IP 付き） | 1〜2 分 |
-| `02_vm_vnet_vstr.yml` | 仮想化の演習用の `handson02-virt`（CentOS 7、KVM）と、ネットワーク・ストレージの演習用の `handson02-vnet`（CentOS 7、Floating IP 付き） | 1〜2 分 |
-| `08_openstack_single.yml` | 入れ子の OpenStack（all-in-one）用の `handson08-openstack-single`（CentOS 7） | スタック 1 分、playbook 約 10 分、テスト用 playbook 約 2 分 |
-| `10_openstack_multi.yml` | 入れ子の OpenStack（cc 1 台 + compute 2 台）用の `handson10-openstack-{cc,node1,node2}`（CentOS 7） | スタック 1〜2 分、playbook 約 12 分、テスト用 playbook 約 2 分 |
+| テンプレート | cloud-support の名前 | 作るもの | 所要時間の目安 |
+|---|---|---|---|
+| `00_console.yml` | （Horizon で作る） | 作業用ネットワーク `work-net`（192.168.199.0/24）、ルーター `Ext-Router`、作業用の console サーバー（Rocky 9、Floating IP 付き） | 1〜2 分 |
+| `02_vm_vnet_vstr.yml` | `basic` | 仮想化の演習用の `handson02-virt`（CentOS 7、KVM）と、ネットワーク・ストレージの演習用の `handson02-vnet`（CentOS 7、Floating IP 付き） | 1〜2 分 |
+| `08_openstack_single.yml` | `single` | 入れ子の OpenStack（all-in-one）用の `handson08-openstack-single`（CentOS 7） | スタック 1 分、playbook 約 10 分、テスト用 playbook 約 2 分 |
+| `10_openstack_multi.yml` | `multi` | 入れ子の OpenStack（cc 1 台 + compute 2 台）用の `handson10-openstack-{cc,node1,node2}`（CentOS 7） | スタック 1〜2 分、playbook 約 12 分、テスト用 playbook 約 2 分 |
 
 1 名のクォータ（インスタンス 5、RAM 40GB、Floating IP 2）に収まるのは、console と、ほかの演習環境 1 つまで。`cloud-support create` は、演習環境が残っていると作成を拒否する。
 
@@ -131,7 +131,7 @@ uv run ansible-playbook site_run_test.yml   # 31〜39 を順に実行する
 
 1. ブラウザで Horizon（`http://<cc サーバーの外部 IP>/dashboard`）に `student-00000` / `pass-00000` でログインする
 2. 「オーケストレーション」→「スタック」→「スタックの起動」で、テンプレートのソースに URL `http://<repo サーバー>/hands-on/00_console.yml` を指定する（または、ファイルの内容を「直接入力」に貼り付ける）
-3. スタック名（例: `console`）と、console のパスワード（`password`）を入力して起動する
+3. スタック名 `console`（`cloud-support` はこの名前で console のスタックを見分ける）と、console のパスワード（`password`）を入力して起動する
 4. スタックが「作成完了」になったら、「概要」の出力 `console` で Floating IP を確かめる
 
 手元の端末から console に `rocky` ユーザーでログインする（パスワードは 3. で入力したもの）。
@@ -164,11 +164,11 @@ cloud-support ls           # 演習環境はありません（console だけで�
 
 以降の作業はすべて console で行う。console は演習の期間中は削除しない。
 
-### 2. 02: 仮想化・仮想ネットワーク・仮想ストレージの演習環境
+### 2. basic: 仮想化・仮想ネットワーク・仮想ストレージの演習環境
 
 ```bash
-cloud-support create 02    # スタック handson02 を作り、outputs を表示する
-cloud-support ls           # 02  スタック handson02（CREATE_COMPLETE）
+cloud-support create basic # スタック handson02 を作り、outputs を表示する
+cloud-support ls           # basic  スタック handson02（CREATE_COMPLETE）
 ```
 
 `handson02-virt`（192.168.199.10）と `handson02-vnet`（192.168.199.11）に、console から `centos` / `password` でログインできることを確かめる。
@@ -181,29 +181,29 @@ ssh centos@192.168.199.11    # プロンプト [VNET]。target・iscsid・httpd 
 確かめたら削除する。消す対象が表示されるので、`y` で消す。
 
 ```bash
-cloud-support delete 02
+cloud-support delete basic
 cloud-support ls           # 演習環境はありません
 ```
 
-### 3. 08: 入れ子の OpenStack（all-in-one）
+### 3. single: 入れ子の OpenStack（all-in-one）
 
 スタックを作り、続けて構築 playbook で入れ子の OpenStack（Newton）を Packstack で構築する。構築のログが流れ、最後に「構築完了」か「構築失敗」が出る。
 
 ```bash
-cloud-support create 08
+cloud-support create single
 ```
 
-構築は端末から切り離して動くので、Ctrl-C で表示を止めても、SSH が切れても止まらない。再接続したら、状態を `ls` で確かめ、ログを `log` で表示する（構築中なら終わるまで追従する）。ログは `~/.support/logs/08-<日時>.log` に残る。
+構築は端末から切り離して動くので、Ctrl-C で表示を止めても、SSH が切れても止まらない。再接続したら、状態を `ls` で確かめ、ログを `log` で表示する（構築中なら終わるまで追従する）。ログは `~/.support/logs/single-<日時>.log` に残る。
 
 ```bash
-cloud-support ls           # 08  スタック handson08（CREATE_COMPLETE）  構築中 / 構築完了 / 構築失敗
-cloud-support log 08
+cloud-support ls           # single  スタック handson08（CREATE_COMPLETE）  構築中 / 構築完了 / 構築失敗
+cloud-support log single
 ```
 
 テスト用 playbook は `cloud-support` では流さない。講師の確認では手で流し、入れ子の OpenStack の上に cirros の VM 2 台を作り、VM 間の通信と Floating IP での ping・ssh を確かめる。最後の `PLAY RECAP` で `failed=0` であること。
 
 ```bash
-cd ~/.support/08
+cd ~/.support/single
 curl -fsSO http://reposerver-centos7/hands-on/08_openstack_single_test_playbook.yml
 ansible-playbook -i 08_openstack_single_inventory.yml 08_openstack_single_test_playbook.yml
 cd ~
@@ -212,30 +212,28 @@ cd ~
 確かめたら削除する。
 
 ```bash
-cloud-support delete 08
+cloud-support delete single
 ```
 
-### 4. 10: 入れ子の OpenStack（複数ノード）
+### 4. multi: 入れ子の OpenStack（複数ノード）
 
-08 と同じ流れで、cc 1 台と compute 2 台の入れ子の OpenStack を作る。テスト用 playbook は VM 2 台を別々の compute に置き、compute をまたいだ通信（VXLAN）も確かめる。各 playbook の `PLAY RECAP` で、全ホストが `failed=0` であること。
+single と同じ流れで、cc 1 台と compute 2 台の入れ子の OpenStack を作る。テスト用 playbook は VM 2 台を別々の compute に置き、compute をまたいだ通信（VXLAN）も確かめる。各 playbook の `PLAY RECAP` で、全ホストが `failed=0` であること。
 
 ```bash
-cloud-support create 10
-cd ~/.support/10
+cloud-support create multi
+cd ~/.support/multi
 curl -fsSO http://reposerver-centos7/hands-on/10_openstack_multi_test_playbook.yml
 ansible-playbook -i 10_openstack_multi_inventory 10_openstack_multi_test_playbook.yml
 cd ~
-cloud-support delete 10
+cloud-support delete multi
 ```
 
-### 5. 06 の後片付けと、演習外のリソースの確認
+### 5. 残ったリソースの確認
 
-06 は、受講者が CLI でネットワーク・サブネット・ポート・キーペア・サーバーを手で作る演習である。`cloud-support delete 06` は、06 の手順どおりの名前のリソース（`openstack-single`、`handson06-cc-eth0`・`-eth1`、`handson06-subnet` とルーターとの接続、`handson06-net`、`handson06-key`）だけを消す。
-
-`cloud-support check` は、console と演習環境のスタック、06 の手順どおりの名前のリソース以外のもの（名前を打ち間違えたもの、作りかけのもの）と、06 の名前のリソースの重複を報告し、消すためのコマンドを出す。演習が進まなくなった受講者は、まずこれを実行する。
+`cloud-support check` は、console と演習環境（basic・single・multi）のスタックに含まれないリソース（各回の演習で受講者が CLI で作ったもの、作りかけのもの）を報告し、消すためのコマンドを出す。削除はしない。演習の回の最後と、演習が進まなくなったときに実行する。
 
 ```bash
-cloud-support check        # 演習外のリソースは見つかりませんでした
+cloud-support check        # console と演習環境のスタックに含まれないリソースは見つかりませんでした
 ```
 
 判定の詳細: [support.sh の仕様](../docs/specifications/shell/support-sh.md)（topse-tools にはない。このリポジトリの `docs/`）
@@ -246,7 +244,7 @@ cloud-support check        # 演習外のリソースは見つかりませんで
 
 ### cloud-support が使えないとき
 
-repo サーバーや `cloud-support` に不具合があるときは、手で同じことをする。資材を取得し、スタックを作り、08/10 は構築 playbook を流す。
+repo サーバーや `cloud-support` に不具合があるときは、手で同じことをする。資材を取得し、スタックを作り、single/multi は構築 playbook を流す。
 
 ```bash
 cd ~

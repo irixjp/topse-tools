@@ -3,34 +3,37 @@
 # cloud-support: 演習環境の作成・一覧・削除と、console と演習環境のスタックに含まれないリソースの検出を行う。
 # console の ~/.bashrc から読み込む（00_console.yml が ~/.support/support.sh に置く）。
 #
-#   cloud-support ls                 現在の演習環境の状態
-#   cloud-support create 02|08|10    演習環境を作る（08/10 は構築 playbook まで流す）
-#   cloud-support delete 02|08|10    演習環境を消す
-#   cloud-support check              console と演習環境のスタックに含まれないリソースを報告する
-#   cloud-support log 08|10          構築 playbook のログを表示する
-#   cloud-support update             support.sh を repo サーバーから取り直す
+#   cloud-support ls                         現在の演習環境の状態
+#   cloud-support create basic|single|multi  演習環境を作る（single/multi は構築 playbook まで流す）
+#   cloud-support delete basic|single|multi  演習環境を消す
+#   cloud-support check                      console と演習環境のスタックに含まれないリソースを報告する
+#   cloud-support log single|multi           構築 playbook のログを表示する
+#   cloud-support update                     support.sh を repo サーバーから取り直す
 
 CS_REPO_URL="${CS_REPO_URL:-http://reposerver-centos7/hands-on}"
 CS_DIR="${CS_DIR:-$HOME/.support}"
 # console と演習環境の VM が載る work-net（00_console.yml）
 CS_WORK_CIDR=192.168.199.0/24
 
-_cs_template()  { case $1 in 02) echo 02_vm_vnet_vstr.yml ;; 08) echo 08_openstack_single.yml ;; 10) echo 10_openstack_multi.yml ;; esac; }
-_cs_inventory() { case $1 in 08) echo 08_openstack_single_inventory.yml ;; 10) echo 10_openstack_multi_inventory ;; esac; }
-_cs_playbook()  { case $1 in 08) echo 08_openstack_single_playbook.yml ;; 10) echo 10_openstack_multi_playbook.yml ;; esac; }
+# 演習環境の名前。スタック名・テンプレートのファイル名は旧演習の番号のまま（basic=02、single=08、multi=10）
+CS_ENVS="basic single multi"
+_cs_stack()     { case $1 in basic) echo handson02 ;; single) echo handson08 ;; multi) echo handson10 ;; esac; }
+_cs_template()  { case $1 in basic) echo 02_vm_vnet_vstr.yml ;; single) echo 08_openstack_single.yml ;; multi) echo 10_openstack_multi.yml ;; esac; }
+_cs_inventory() { case $1 in single) echo 08_openstack_single_inventory.yml ;; multi) echo 10_openstack_multi_inventory ;; esac; }
+_cs_playbook()  { case $1 in single) echo 08_openstack_single_playbook.yml ;; multi) echo 10_openstack_multi_playbook.yml ;; esac; }
 # create の所要時間（スタックの作成と構築 playbook の合計。ステージング環境の実測 1 分半・10 分半・12 分半）
-_cs_minutes()   { case $1 in 02) echo 2 ;; 08) echo 11 ;; 10) echo 13 ;; esac; }
-_cs_build_msg() { case $1 in 08) echo 演習用のシングルノード openstack 環境を構築します ;; 10) echo 演習用のマルチノード openstack 環境を構築します ;; esac; }
+_cs_minutes()   { case $1 in basic) echo 2 ;; single) echo 11 ;; multi) echo 13 ;; esac; }
+_cs_build_msg() { case $1 in single) echo 演習用のシングルノード openstack 環境を構築します ;; multi) echo 演習用のマルチノード openstack 環境を構築します ;; esac; }
 
 _cs_usage() {
   cat <<'EOF'
 使い方:
-  cloud-support ls                  現在の演習環境の状態
-  cloud-support create 02|08|10     演習環境を構築(どの環境を作るかは講師から指示があります)
-  cloud-support delete 02|08|10     演習環境を消す
-  cloud-support check               console と演習環境のスタックに含まれないリソースを報告する
-  cloud-support log 08|10           構築のログを表示する
-  cloud-support update              cloud-support を最新にする(メンテナンス用)
+  cloud-support ls                          現在の演習環境の状態
+  cloud-support create basic|single|multi   演習環境を構築(どの環境を作るかは講師から指示があります)
+  cloud-support delete basic|single|multi   演習環境を消す
+  cloud-support check                       console と演習環境のスタックに含まれないリソースを報告する
+  cloud-support log single|multi            構築のログを表示する
+  cloud-support update                      cloud-support を最新にする(メンテナンス用)
 EOF
 }
 
@@ -108,11 +111,11 @@ _cs_build_label() {
   esac
 }
 
-# 存在する演習環境を「番号<TAB>説明」で出力する（DIR に stacks が必要）
+# 存在する演習環境を「名前<TAB>説明」で出力する（DIR に stacks が必要）
 _cs_envs() {
   local dir=$1 n
-  for n in 02 08 10; do
-    jq -r --arg s "handson$n" --arg n "$n" '.[] | select(."Stack Name" == $s) | "\($n)\tスタック \($s)（\(."Stack Status")）"' "$dir/stacks.json"
+  for n in $CS_ENVS; do
+    jq -r --arg s "$(_cs_stack "$n")" --arg n "$n" '.[] | select(."Stack Name" == $s) | "\($n)\tスタック \($s)（\(."Stack Status")）"' "$dir/stacks.json"
   done
 }
 
@@ -131,7 +134,7 @@ _cs_ls() {
     echo "演習環境:"
     while IFS=$'\t' read -r n desc; do
       label=""
-      case $n in 08|10) label=$(_cs_build_label "$n") ;; esac
+      case $n in single|multi) label=$(_cs_build_label "$n") ;; esac
       echo "  $n  $desc${label:+  $label}"
     done <<< "$envs"
   fi
@@ -143,7 +146,7 @@ _cs_ls() {
 
 _cs_create() {
   local n=$1 dir envs f files stack status
-  case $n in 02|08|10) ;; *) echo "作れる演習環境は 02、08、10 です" >&2; return 1 ;; esac
+  case $n in basic|single|multi) ;; *) echo "作れる演習環境は basic、single、multi です" >&2; return 1 ;; esac
   _cs_auth || return 1
   dir=$(mktemp -d)
   _cs_fetch "$dir" stacks || { rm -rf "$dir"; return 1; }
@@ -152,7 +155,7 @@ _cs_create() {
   if [ -n "$envs" ]; then
     echo "演習環境が残っているため作れません（console と演習環境 1 つまでしか作れません）:" >&2
     while IFS=$'\t' read -r f stack; do echo "  $f  $stack" >&2; done <<< "$envs"
-    echo "cloud-support delete <番号> で消してから、もう一度実行してください。" >&2
+    echo "cloud-support delete <名前> で消してから、もう一度実行してください。" >&2
     return 1
   fi
 
@@ -167,7 +170,7 @@ _cs_create() {
     mv "$CS_DIR/$n/$f.tmp" "$CS_DIR/$n/$f"
   done
 
-  stack="handson$n"
+  stack=$(_cs_stack "$n")
   echo "スタック $stack を作成します"
   (cd "$CS_DIR/$n" && openstack stack create -t "$(_cs_template "$n")" --wait "$stack")
   status=$(openstack stack show "$stack" -f value -c stack_status 2> /dev/null)
@@ -181,7 +184,7 @@ _cs_create() {
   # 前の VM の MAC が残っていると、最初の接続が 15 秒ほど待たされるので消しておく
   sudo -n ip neigh flush to "$CS_WORK_CIDR" > /dev/null 2>&1
   openstack stack output show "$stack" --all
-  case $n in 08|10) ;; *) return 0 ;; esac
+  case $n in single|multi) ;; *) return 0 ;; esac
 
   _cs_build_msg "$n"
   _cs_build_start "$n"
@@ -226,7 +229,7 @@ _cs_follow() {
 
 _cs_log() {
   local n=$1
-  case $n in 08|10) ;; *) echo "ログがあるのは 08 と 10 です" >&2; return 1 ;; esac
+  case $n in single|multi) ;; *) echo "ログがあるのは single と multi です" >&2; return 1 ;; esac
   if [ "$(_cs_build_state "$n")" = none ]; then
     echo "$n の構築のログはありません" >&2
     return 1
@@ -237,9 +240,9 @@ _cs_log() {
 _cs_delete() {
   local n=$1 dir envs desc
   case $n in
-    02|08|10) ;;
+    basic|single|multi) ;;
     *)
-      echo "消す演習環境の番号を指定してください: cloud-support delete 02|08|10" >&2
+      echo "消す演習環境の名前を指定してください: cloud-support delete basic|single|multi" >&2
       _cs_auth || return 1
       dir=$(mktemp -d)
       _cs_fetch "$dir" stacks && envs=$(_cs_envs "$dir")
@@ -257,7 +260,8 @@ _cs_delete() {
 }
 
 _cs_delete_stack() {
-  local n=$1 stack="handson$1" status pid i
+  local n=$1 stack status pid i
+  stack=$(_cs_stack "$n")
   status=$(openstack stack show "$stack" -f value -c stack_status 2> /dev/null)
   if [ -z "$status" ]; then
     echo "$n の演習環境（スタック $stack）はありません"
@@ -366,7 +370,7 @@ _cs_check() {
   fi
   if grep -q '^G' <<< "$out"; then
     echo
-    echo "console と演習環境（02・08・10）のスタックに含まれないリソース（各回の演習で作ったもの、作りかけのものなど）:"
+    echo "console と演習環境（basic・single・multi）のスタックに含まれないリソース（各回の演習で作ったもの、作りかけのものなど）:"
     grep '^G' <<< "$out" | awk -F'\t' '{ printf "  %-16s %-28s %s%s\n", $2, $3, $4, ($5 == "" ? "" : "  " $5) }'
     [ -n "$other_stacks" ] && echo "  （スタックのリソースは、スタックを消すと一緒に消えます）"
   fi
