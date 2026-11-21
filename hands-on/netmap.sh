@@ -7,8 +7,10 @@
 # plotnetcfg の出力（dot）から、演習に関係ないもの（lo、IPv6 のリンクローカルアドレス、MTU、ovs-system、vxlan_sys_4789、
 # single の eth0）を外し、
 # つながりが左から右への 1 本の線に見えるよう、矢印の向きをそろえてから、dot で左から右に並べて描く。
-# 向きをそろえる線: br-ex から先（eth1 → br-ex はそのまま）、qbr → qvb、phy-br-ex → int-br-ex、br-tun → patch-int
-# （plotnetcfg 0.4.1 は phy-br-ex と int-br-ex の線を、実行ごとにどちらの向きでも出す）
+# 向きをそろえる線: br-ex から先（eth1 → br-ex はそのまま）、qbr → qvb、phy-br-ex → int-br-ex、br-tun → patch-int、
+# patch-int → patch-tun
+# （plotnetcfg 0.4.1 は、patch のポートの組（phy-br-ex と int-br-ex、patch-int と patch-tun）の線を、
+#   実行ごとにどちらの向きでも出す）
 # ssh の -n: スクリプトの中で呼んだときに、標準入力（スクリプトの残り）を ssh に読ませない
 if [ -n "$2" ]; then ssh -n "$2" plotnetcfg; else plotnetcfg; fi > /tmp/netmap.$$.dot
 # eth0 は、vxlan のトンネルの下の道（vxlan のポートからの点線がある。multi）なら残し、そうでなければ（single）外す
@@ -20,6 +22,7 @@ sed -e 's/\\nfe80[^\\"]*//g' -e 's/\\nMTU [0-9]*//g' \
     -e 's|^"/br-ex" -> "/eth1"|"/eth1" -> "/br-ex"|' \
     -e 's|^\("/qvb[^"]*"\) -> \("/qbr[^"]*"\)$|\2 -> \1|' \
     -e 's|^"//ovs:br-int//int-br-ex" -> "//ovs:br-ex//phy-br-ex"|"//ovs:br-ex//phy-br-ex" -> "//ovs:br-int//int-br-ex"|' \
+    -e 's|^"//ovs:br-int//patch-tun" -> "//ovs:br-tun//patch-int"|"//ovs:br-tun//patch-int" -> "//ovs:br-int//patch-tun"|' \
     -e 's|^\("//ovs:br-tun//patch-int"\) -> \("/br-tun"\)|\2 -> \1|' |
 grep -v -e '/lo"' -e '"/ovs-system"' -e '"/vxlan_sys_4789"' ${drop_eth0:+-e "$drop_eth0"} |
 dot -Tsvg -Grankdir=LR -Gfontname=Helvetica -Nfontname=Helvetica \
